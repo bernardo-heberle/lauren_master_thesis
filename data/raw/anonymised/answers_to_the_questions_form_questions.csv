@@ -1,13 +1,13 @@
-question_col,correct_answer,accepts_multiple
-Q1,Primary tooth avulsion,False
-Q2,No treatment needed,False
-Q3,Antibiotics are not indicated,False
-Q4,Avulsion of a permanent tooth,False
-Q39,Gently rinse the root with saline. Re-implant and splint the tooth to the neighboring teeth,False
-Q41,False,False
-Q40,Milk>Saline>Tap Water>Air,False
-Q42,Amoxicillin BID for 7 days|Doxycycline BID for 7 days|Either amoxicillin or doxycycline BID for 7 days,True
-Q44,Complicated crown fracture of a permanent incisor,False
-Q45,The patient should be sent to a dentist as soon as possible to cover the exposed nerve,False
-Q46,Chest and/or soft tissues of the face,False
-Q47,The patient has an associated tooth root fracture,False
+question_col,correct_answer
+Q1,Primary tooth avulsion
+Q2,No treatment needed
+Q3,Antibiotics are not indicated
+Q4,Avulsion of a permanent tooth
+Q39,Gently rinse the root with saline. Re-implant and splint the tooth to the neighboring teeth
+Q41,False
+Q40,Milk>Saline>Tap Water>Air
+Q42,Either amoxicillin or doxycycline BID for 7 days
+Q44,Complicated crown fracture of a permanent incisor
+Q45,The patient should be sent to a dentist as soon as possible to cover the exposed nerve
+Q46,Chest and/or soft tissues of the face
+Q47,The patient has an associated tooth root fracture

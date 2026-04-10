@@ -1,0 +1,30 @@
+Variable,Overall (N=18),No Resource (n=7),PDF (n=5),ChatGPT (n=6),p-value
+Panel A — Demographics,,,,,
+"Education level, n (%)",,,,,
+  Medical Student,4 (22.2%),1 (14.3%),1 (20.0%),2 (33.3%),0.616
+  Resident/Fellow,5 (27.8%),3 (42.9%),1 (20.0%),1 (16.7%),
+  Attending,6 (33.3%),3 (42.9%),2 (40.0%),1 (16.7%),
+  Advanced Practice Provider,3 (16.7%),0 (0.0%),1 (20.0%),2 (33.3%),
+"Specialty, n (%)",,,,,
+  Emergency Medicine,5 (27.8%),2 (28.6%),1 (20.0%),2 (33.3%),0.277
+  Pediatric Emergency Medicine,2 (11.1%),2 (28.6%),0 (0.0%),0 (0.0%),
+  Pediatric Medicine,3 (16.7%),1 (14.3%),2 (40.0%),0 (0.0%),
+  Family Medicine,1 (5.6%),1 (14.3%),0 (0.0%),0 (0.0%),
+  Not specified,7 (38.9%),1 (14.3%),2 (40.0%),4 (66.7%),
+,,,,,
+"Panel B — Self-Assessment (pre-case, 0–10 scale)",,,,,
+"Self-assessment, median (IQR)",,,,,
+  TDI knowledge (0–10),3.0 (2.0–6.8),5.0 (1.5–7.0),3.0 (3.0–7.0),2.5 (1.2–5.2),0.639
+  Avulsion confidence (0–10),5.5 (2.0–7.0),6.0 (3.0–7.5),3.0 (3.0–9.0),4.0 (2.0–6.0),0.620
+  Fracture confidence (0–10),5.0 (2.2–6.0),6.0 (2.5–7.0),3.0 (3.0–9.0),4.5 (2.2–6.0),0.759
+,,,,,
+Panel C — Knowledge Assessment Outcomes,,,,,
+"Knowledge outcomes, median (IQR)",,,,,
+  Total correct (out of 12),8.0 (7.0–9.8),8.0 (6.5–8.5),9.0 (7.0–10.0),8.5 (7.2–10.5),0.577
+  Total incorrect,4.0 (2.2–5.0),4.0 (3.5–5.5),3.0 (2.0–5.0),3.5 (1.5–4.8),0.577
+  Total ‘not sure’,0.0 (0.0–0.0),0.0 (0.0–1.5),0.0 (0.0–0.0),0.0 (0.0–0.0),0.405
+  Percent correct of attempted (%),66.7 (58.3–81.2),66.7 (54.2–70.8),75.0 (58.3–83.3),70.8 (60.4–87.5),0.577
+,,,,,
+Panel D — Survey Duration,,,,,
+"Survey duration, median (IQR)",,,,,
+  Completion time (min),8.3 (6.0–14.7),5.9 (5.1–7.0),14.8 (10.4–17.8),10.2 (7.0–13.7),0.145

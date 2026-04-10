@@ -1,0 +1,13 @@
+column,label
+c1_injury_type,C1: Injury type
+c1_treatment,C1: Treatment
+c1_antibiotics,C1: Antibiotics
+c2_injury_type,C2: Injury type
+c2_treatment,C2: Treatment
+c2_tf_60min,C2: >60 min outside mouth (T/F)
+c2_storage_rank,C2: Storage medium ranking
+c2_antibiotics,C2: Antibiotic therapy
+c3_injury_type,C3: Injury type
+c3_treatment,C3: Treatment
+c3_imaging,C3: Imaging area
+c3_antibiotics,C3: Antibiotic indication

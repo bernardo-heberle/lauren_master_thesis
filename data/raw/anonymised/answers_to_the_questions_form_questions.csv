@@ -1,12 +1,13 @@
-﻿What dental injury is most likely shown in this case?,Primary tooth avulsion
-What would be the treatment of choice for this injury?,No treatment needed
-What (if any) would be the most appropriate antibiotic recommendation for this patient?,Antibiotics are not indicated
-What dental injury is most likely shown in this case?,Avulsion of a permanent tooth
-What would be the treatment of choice for this injury?,Gently rinse the root with saline. Re-implant and splint the tooth to the neighboring teeth
-T/F: A tooth that has been outside of the mouth for >60 minutes should not be placed back in the socket. ,False
-Rank the following storage mediums from best to worst prognosis.,Milk>Saline>Tap Water>Air
-What (if any) would be the appropriate antibiotic therapy for this patient?,either Amoxicillin or Doxycycline BID for 7 days
-What dental injury is most likely shown in this case?,Complicated crown fracture of a permanent incisor
-"What treatment, if any, is indicated for this case? ",The patient should be sent to a dentist as soon as possible to cover the exposed nerve
-"The patient isn’t sure where the fractured fragment went. Imaging of which area, if any, could be useful to locate the fragment?",Chest and/or soft tissues of the face
-Antibiotic therapy is up to provider discretion for fractured teeth. Which of these is not an indication for antibiotic therapy?,The patient has an associated root fracture
+question_col,correct_answer,accepts_multiple
+Q1,Primary tooth avulsion,False
+Q2,No treatment needed,False
+Q3,Antibiotics are not indicated,False
+Q4,Avulsion of a permanent tooth,False
+Q39,Gently rinse the root with saline. Re-implant and splint the tooth to the neighboring teeth,False
+Q41,False,False
+Q40,Milk>Saline>Tap Water>Air,False
+Q42,Amoxicillin BID for 7 days|Doxycycline BID for 7 days|Either amoxicillin or doxycycline BID for 7 days,True
+Q44,Complicated crown fracture of a permanent incisor,False
+Q45,The patient should be sent to a dentist as soon as possible to cover the exposed nerve,False
+Q46,Chest and/or soft tissues of the face,False
+Q47,The patient has an associated tooth root fracture,False

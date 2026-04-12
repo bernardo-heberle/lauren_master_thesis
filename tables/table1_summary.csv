@@ -1,12 +1,12 @@
 Variable,Overall (N=18),No Resource (n=7),PDF (n=5),ChatGPT (n=6),p-value
 Panel A — Demographics,,,,,
 "Education level, n (%)",,,,,
-  Medical Student,4 (22.2%),1 (14.3%),1 (20.0%),2 (33.3%),0.616
+  Medical Student,4 (22.2%),1 (14.3%),1 (20.0%),2 (33.3%),NT
   Resident/Fellow,5 (27.8%),3 (42.9%),1 (20.0%),1 (16.7%),
   Attending,6 (33.3%),3 (42.9%),2 (40.0%),1 (16.7%),
   Advanced Practice Provider,3 (16.7%),0 (0.0%),1 (20.0%),2 (33.3%),
 "Specialty, n (%)",,,,,
-  Emergency Medicine,5 (27.8%),2 (28.6%),1 (20.0%),2 (33.3%),0.277
+  Emergency Medicine,5 (27.8%),2 (28.6%),1 (20.0%),2 (33.3%),NT
   Pediatric Emergency Medicine,2 (11.1%),2 (28.6%),0 (0.0%),0 (0.0%),
   Pediatric Medicine,3 (16.7%),1 (14.3%),2 (40.0%),0 (0.0%),
   Family Medicine,1 (5.6%),1 (14.3%),0 (0.0%),0 (0.0%),

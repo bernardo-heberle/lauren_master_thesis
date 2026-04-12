@@ -19,6 +19,7 @@ from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
+from scipy.stats import spearmanr
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).parent.parent
@@ -141,9 +142,9 @@ def build_fig2(df: pd.DataFrame) -> go.Figure:
         fig.add_trace(_box_trace(
             ["Percent Correct"] * len(sub),
             sub["pct_correct_of_attempted"].tolist(),
-            group, show_legend=False,
+            group, show_legend=True,
         ))
-    _common_layout(fig, "Percent Correct by Group", "Correct of Attempted (%)", show_legend=False)
+    _common_layout(fig, "Percent Correct by Group", "Correct of Attempted (%)", show_legend=True)
     return fig
 
 
@@ -154,9 +155,9 @@ def build_fig3(df: pd.DataFrame) -> go.Figure:
         fig.add_trace(_box_trace(
             ["Completion Time"] * len(sub),
             sub["duration_min"].tolist(),
-            group, show_legend=False,
+            group, show_legend=True,
         ))
-    _common_layout(fig, "Completion Time by Group", "Time (minutes)", show_legend=False)
+    _common_layout(fig, "Completion Time by Group", "Time (minutes)", show_legend=True)
     return fig
 
 
@@ -178,9 +179,131 @@ def build_fig4(df: pd.DataFrame) -> go.Figure:
     for group in HUE_ORDER:
         sub = df_long[df_long["group_label"] == group]
         fig.add_trace(_box_trace(sub["metric"].tolist(), sub["rating"].tolist(),
-                                 group, show_legend=False))
-    _common_layout(fig, "Self-Assessment by Group", "Rating (0\u201310)", show_legend=False)
+                                 group, show_legend=True))
+    _common_layout(fig, "Self-Assessment by Group", "Rating (0\u201310)", show_legend=True)
     return fig
+
+
+def fmt_pval(p: float) -> str:
+    """Format a p-value; returns 'p < 0.001' when below threshold, else 'p = 0.xxx'."""
+    if p < 0.001:
+        return "p < 0.001"
+    return f"p = {p:.3f}"
+
+
+def build_scatter(df_sub: pd.DataFrame, x_col: str, y_col: str,
+                  x_label: str, y_label: str, title: str, color: str) -> go.Figure:
+    """
+    Build a single Plotly scatter plot with a Spearman rho annotation in the top-right.
+    No trendline; single color; no legend.
+    """
+    import numpy as np
+
+    valid = df_sub[[x_col, y_col]].dropna()
+    x = valid[x_col].reset_index(drop=True)
+    y = valid[y_col].reset_index(drop=True)
+    rho, pval = spearmanr(x, y)
+
+    # Add a small random jitter to integer-valued axes to reduce overplotting
+    rng = np.random.default_rng(42)
+    x_jit = (x + rng.uniform(-0.15, 0.15, size=len(x))).tolist()
+    y_jit = (y + rng.uniform(-0.15, 0.15, size=len(y))).tolist()
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x_jit,
+        y=y_jit,
+        mode="markers",
+        marker=dict(size=10, color=color, opacity=0.70,
+                    line=dict(color="white", width=0.5)),
+        showlegend=False,
+        hovertemplate=(
+            f"{x_label}: %{{x:.1f}}<br>{y_label}: %{{y:.0f}}<extra></extra>"
+        ),
+    ))
+
+    fig.update_layout(
+        title=dict(text=f"<b>{title}</b>", font=dict(size=16, family=FONT), x=0.5),
+        xaxis=dict(
+            title=dict(text=x_label, font=dict(size=13, family=FONT)),
+            range=[-0.4, 10.7],
+            tick0=0, dtick=2,
+            showgrid=False, zeroline=False,
+            showline=True, linecolor="#d0d0d0",
+            tickfont=dict(size=12, family=FONT),
+        ),
+        yaxis=dict(
+            title=dict(text=y_label, font=dict(size=13, family=FONT)),
+            range=[-0.4, 12.7],
+            tick0=0, dtick=2,
+            showgrid=False, zeroline=False,
+            showline=True, linecolor="#d0d0d0",
+            tickfont=dict(size=12, family=FONT),
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(family=FONT, size=13),
+        showlegend=False,
+        margin=dict(l=65, r=30, t=65, b=55),
+        height=460,
+    )
+    return fig
+
+
+def build_correlation_table(df: pd.DataFrame) -> str:
+    """
+    Compute Spearman correlations between self_confidence_mean and n_correct
+    for the full sample and each experimental group.
+    Returns an HTML table string.
+    """
+    subsets = [
+        ("All Participants", df),
+        ("No Resource",      df[df["group_label"] == "No Resource"]),
+        ("PDF",              df[df["group_label"] == "PDF"]),
+        ("ChatGPT",          df[df["group_label"] == "ChatGPT"]),
+    ]
+
+    th = 'style="padding:7px 14px;text-align:center;background:#f0f3f8;font-weight:700;color:#1a1a1a;border:1px solid #d8dce3;"'
+    th_left = 'style="padding:7px 14px;text-align:left;background:#f0f3f8;font-weight:700;color:#1a1a1a;border:1px solid #d8dce3;"'
+    td_c = 'style="padding:7px 14px;text-align:center;border:1px solid #d8dce3;"'
+    td_l = 'style="padding:7px 14px;text-align:left;border:1px solid #d8dce3;"'
+
+    header = (
+        f"<thead><tr>"
+        f"<th {th_left}>Subset</th>"
+        f"<th {th}>n</th>"
+        f"<th {th}>\u03c1 (rho)</th>"
+        f"<th {th}>p-value</th>"
+        f"</tr></thead>"
+    )
+
+    rows = []
+    for label, sub in subsets:
+        valid = sub[["self_confidence_mean", "n_correct"]].dropna()
+        n = len(valid)
+        if n >= 3:
+            rho, pval = spearmanr(valid["self_confidence_mean"], valid["n_correct"])
+            rho_str  = f"{rho:.2f}"
+            pval_str = "< 0.001" if pval < 0.001 else f"{pval:.3f}"
+        else:
+            rho_str  = "—"
+            pval_str = "—"
+        rows.append(
+            f"<tr>"
+            f"<td {td_l}>{label}</td>"
+            f"<td {td_c}>{n}</td>"
+            f"<td {td_c}>{rho_str}</td>"
+            f"<td {td_c}>{pval_str}</td>"
+            f"</tr>"
+        )
+
+    return (
+        f'<table style="border-collapse:collapse;font-family:{FONT};'
+        f'font-size:13px;width:auto;">'
+        f"{header}"
+        f"<tbody>{''.join(rows)}</tbody>"
+        f"</table>"
+    )
 
 
 def fig_to_html_div(fig: go.Figure, div_id: str) -> str:
@@ -220,6 +343,13 @@ spread of responses. None of the between-group comparisons reached statistical s
 (p&nbsp;&lt;&nbsp;0.05), which is expected given the small sample size — these results are
 preliminary and intended to inform the design of a larger, adequately powered study.
 </p>
+<p>
+We also examined whether participants who rated themselves as more confident before the
+assessment tended to answer more questions correctly. This question was explored both across all
+participants combined and within each experimental group separately, using Spearman rank
+correlation — a method suited to ordinal ratings and count data. The scatter plots and
+correlation table at the end of this report display those results.
+</p>
 """
 
 FORMAL_METHODS = """\
@@ -255,18 +385,37 @@ adjusted for multiple comparisons using the Bonferroni correction (12 tests; adj
 <em>pandas</em>&nbsp;3.0, <em>scipy</em>&nbsp;1.17, and <em>statsmodels</em>&nbsp;0.14.
 Statistical significance was set at α&nbsp;=&nbsp;0.05 for all primary comparisons.
 </p>
+<p>
+To examine the association between pre-assessment self-rated confidence and knowledge
+performance, we computed Spearman rank-order correlations (&rho;) between the average
+self-assessment score and the total number of correct responses (out of 12). The average
+self-assessment score was the mean of three 0&ndash;10 Likert ratings completed before the
+assessment: self-rated TDI knowledge, avulsion management confidence, and fracture management
+confidence. Correlations were computed for the full sample (n&nbsp;=&nbsp;18) and separately
+within each experimental group (No Resource n&nbsp;=&nbsp;7, PDF n&nbsp;=&nbsp;5,
+ChatGPT n&nbsp;=&nbsp;6). A small uniform jitter (&plusmn;0.15 units) was applied to both
+axes to reduce overplotting of identical values. Axis ranges were fixed across all four
+scatter plots (x: 0&ndash;10; y: 0&ndash;12) to allow direct visual comparison across
+subsets.
+</p>
 
 <h3>Figures</h3>
 <p>
-Boxplots display the median (horizontal line), interquartile range (box boundaries), and
-1.5&times; IQR (whiskers) for each group. Individual observations are overlaid as jittered
-points to show the full data distribution given the small sample size. Groups are color-coded
-consistently across all figures: No Resource
+Boxplots (Figures 1&ndash;4) display the median (horizontal line), interquartile range (box
+boundaries), and 1.5&times; IQR (whiskers) for each group. Individual observations are
+overlaid as jittered points to show the full data distribution given the small sample size.
+Groups are color-coded consistently across all figures: No Resource
 (<span style="color:#F8766D;font-weight:bold;">#F8766D</span>), PDF
 (<span style="color:#CD9600;font-weight:bold;">#CD9600</span>), ChatGPT
-(<span style="color:#00A9FF;font-weight:bold;">#00A9FF</span>). Figures were generated using
-Plotly&nbsp;6.7 and are interactive — hover over any element for exact values, and use the
-camera icon in the toolbar to export a PNG at the current display size.
+(<span style="color:#00A9FF;font-weight:bold;">#00A9FF</span>). Scatter plots
+(Figures 5&ndash;8) display the relationship between average self-rated confidence (x-axis,
+0&ndash;10) and total correct responses (y-axis, 0&ndash;12); each point represents one
+participant. Axis ranges are fixed across all four plots to allow direct visual comparison.
+Spearman &rho; and the associated p-value are annotated in the upper-right corner of each
+scatter plot.
+All figures were generated using Plotly&nbsp;6.7 and are interactive — hover over any element
+for exact values, and use the camera icon in the toolbar to export a PNG at the current
+display size.
 </p>
 """
 
@@ -288,6 +437,14 @@ TABLE_LEGENDS = {
         "corrected p-values were adjusted for multiple comparisons using the Bonferroni "
         "method (12 tests; adjusted significance threshold &alpha;&nbsp;=&nbsp;0.0042). "
         "No question reached statistical significance after correction."
+    ),
+    "table3": (
+        "<strong>Table 3.</strong> Spearman rank-order correlations between average "
+        "pre-assessment self-rated confidence (0&ndash;10 scale; mean of TDI knowledge, "
+        "avulsion confidence, and fracture confidence ratings) and the number of correct "
+        "responses (out of 12), computed for the full sample and separately within each "
+        "experimental group. &rho;&nbsp;=&nbsp;Spearman rho. "
+        "Groups: No Resource n&nbsp;=&nbsp;7, PDF n&nbsp;=&nbsp;5, ChatGPT n&nbsp;=&nbsp;6."
     ),
 }
 
@@ -327,6 +484,24 @@ FIGURE_LEGENDS = [
         "p&nbsp;=&nbsp;0.759, average p&nbsp;=&nbsp;0.761)."
     ),
 ]
+
+
+def build_scatter_legend(fig_num: int, subset_label: str, rho: float, pval: float) -> str:
+    """
+    Build the HTML legend string for a correlation scatter plot.
+    Includes subset description, Spearman rho, and p-value.
+    """
+    pval_str = "< 0.001" if pval < 0.001 else f"= {pval:.3f}"
+    return (
+        f"<strong>Figure {fig_num}. Average self-rated confidence vs. total correct "
+        f"({subset_label}).</strong> "
+        f"Each point represents one participant. "
+        f"x-axis: average pre-assessment self-assessment score (mean of TDI knowledge, "
+        f"avulsion confidence, and fracture confidence ratings, each 0&ndash;10). "
+        f"y-axis: number of correct responses (out of 12). "
+        f"Spearman &rho;&nbsp;=&nbsp;{rho:.2f}, p&nbsp;{pval_str}."
+    )
+
 
 # ── HTML template ──────────────────────────────────────────────────────────────
 
@@ -530,6 +705,10 @@ body {
 .btn-pdf:hover    { background: #c0392b; color: white; }
 .btn-png    { color: #0891b2; border-color: #0891b2; }
 .btn-png:hover    { background: #0891b2; color: white; }
+.btn-legend { color: #7c3aed; border-color: #7c3aed; }
+.btn-legend:hover { background: #7c3aed; color: white; }
+.btn-title  { color: #b45309; border-color: #b45309; }
+.btn-title:hover  { background: #b45309; color: white; }
 
 /* ── Figure sections ── */
 .figure-block { margin-bottom: 28px; overflow-x: auto; }
@@ -601,6 +780,13 @@ function dlPng(divId, filename) {
     });
 }
 
+function toggleLegend(divId, btn) {
+    const fig = document.getElementById(divId);
+    const current = fig._fullLayout.showlegend;
+    Plotly.relayout(divId, {showlegend: !current});
+    btn.textContent = current ? '\u25a1 Show Legend' : '\u25a0 Hide Legend';
+}
+
 function updateFigSize(divId) {
     const wSlider = document.getElementById(divId + '-w');
     const hSlider = document.getElementById(divId + '-h');
@@ -625,6 +811,41 @@ function updateFigSize(divId) {
         if (frame) { frame.style.width = w + 'px'; frame.style.maxWidth = 'none'; }
     }
 }
+
+const _titleStore = {};
+
+function toggleTitle(divId, btn) {
+    const fig = document.getElementById(divId);
+    const current = fig._fullLayout.title.text;
+    if (current) {
+        _titleStore[divId] = current;
+        Plotly.relayout(divId, {'title.text': ''});
+        btn.textContent = '\u25a1 Show Title';
+    } else {
+        Plotly.relayout(divId, {'title.text': _titleStore[divId] || ''});
+        btn.textContent = '\u25a0 Hide Title';
+    }
+}
+
+function updateFontSizes(divId) {
+    const title   = parseInt(document.getElementById(divId + '-fs-title').value);
+    const axlabel = parseInt(document.getElementById(divId + '-fs-axlabel').value);
+    const axtick  = parseInt(document.getElementById(divId + '-fs-axtick').value);
+    const legend  = parseInt(document.getElementById(divId + '-fs-legend').value);
+    document.getElementById(divId + '-fs-title-val').textContent   = title   + 'pt';
+    document.getElementById(divId + '-fs-axlabel-val').textContent = axlabel + 'pt';
+    document.getElementById(divId + '-fs-axtick-val').textContent  = axtick  + 'pt';
+    document.getElementById(divId + '-fs-legend-val').textContent  = legend  + 'pt';
+    Plotly.relayout(divId, {
+        'title.font.size':          title,
+        'xaxis.title.font.size':    axlabel,
+        'yaxis.title.font.size':    axlabel,
+        'xaxis.tickfont.size':      axtick,
+        'yaxis.tickfont.size':      axtick,
+        'legend.font.size':         legend,
+        'legend.title.font.size':   legend,
+    });
+}
 """
 
 
@@ -636,16 +857,48 @@ def download_btn(label: str, b64: str, filename: str, mime: str, css_class: str)
     )
 
 
+def font_size_controls(div_id: str,
+                       def_title: int = 16, def_axlabel: int = 13,
+                       def_axtick: int = 12, def_legend: int = 12) -> str:
+    """Render a row of font-size sliders (title, axis labels, axis ticks, legend)."""
+    return (
+        f'<div class="resize-controls">'
+        f'<span>&#65; Font sizes:</span>'
+        f'<label>Title:&nbsp;<span id="{div_id}-fs-title-val" class="resize-val">{def_title}pt</span></label>'
+        f'<input type="range" id="{div_id}-fs-title" min="8" max="28" value="{def_title}"'
+        f' oninput="updateFontSizes(\'{div_id}\')">'
+        f'<label>Axis labels:&nbsp;<span id="{div_id}-fs-axlabel-val" class="resize-val">{def_axlabel}pt</span></label>'
+        f'<input type="range" id="{div_id}-fs-axlabel" min="6" max="24" value="{def_axlabel}"'
+        f' oninput="updateFontSizes(\'{div_id}\')">'
+        f'<label>Ticks:&nbsp;<span id="{div_id}-fs-axtick-val" class="resize-val">{def_axtick}pt</span></label>'
+        f'<input type="range" id="{div_id}-fs-axtick" min="6" max="20" value="{def_axtick}"'
+        f' oninput="updateFontSizes(\'{div_id}\')">'
+        f'<label>Legend:&nbsp;<span id="{div_id}-fs-legend-val" class="resize-val">{def_legend}pt</span></label>'
+        f'<input type="range" id="{div_id}-fs-legend" min="6" max="20" value="{def_legend}"'
+        f' oninput="updateFontSizes(\'{div_id}\')">'
+        f'</div>'
+    )
+
+
 def figure_section(fig_num: int, title: str, fig_div: str, pdf_b64: str,
                    pdf_filename: str, png_filename: str, legend: str,
-                   default_w: int = 800, default_h: int = 460) -> str:
+                   default_w: int = 800, default_h: int = 460,
+                   show_legend_btn: bool = True) -> str:
     """Render a complete figure block with resize controls, download buttons, and legend."""
     div_id  = f"plotly-fig{fig_num}"
     ar      = round(default_h / default_w, 4)
-    pdf_btn = download_btn("⬇ Download PDF", pdf_b64, pdf_filename, "application/pdf", "btn-pdf")
-    png_btn = (
+    pdf_btn    = download_btn("⬇ Download PDF", pdf_b64, pdf_filename, "application/pdf", "btn-pdf")
+    png_btn    = (
         f'<button class="btn btn-png" '
         f'onclick="dlPng(\'{div_id}\',\'{png_filename.replace(".png","")}\')">&#11015; Download PNG</button>'
+    )
+    legend_btn = (
+        f'<button class="btn btn-legend" id="{div_id}-legend-btn" '
+        f'onclick="toggleLegend(\'{div_id}\', this)">&#9632; Hide Legend</button>'
+    ) if show_legend_btn else ""
+    title_btn = (
+        f'<button class="btn btn-title" id="{div_id}-title-btn" '
+        f'onclick="toggleTitle(\'{div_id}\', this)">&#9632; Hide Title</button>'
     )
     resize = f"""\
 <div class="resize-controls">
@@ -664,40 +917,45 @@ def figure_section(fig_num: int, title: str, fig_div: str, pdf_b64: str,
            oninput="updateFigSize('{div_id}')">
   </div>
 </div>"""
+    font_controls = font_size_controls(div_id)
     return f"""\
 <div class="figure-block" id="fig{fig_num}">
   <h3>Figure {fig_num} \u2014 {title}</h3>
   {resize}
-  <div class="download-bar" style="margin-bottom:10px;">{png_btn}{pdf_btn}</div>
+  {font_controls}
+  <div class="download-bar" style="margin-bottom:6px;">{png_btn}{pdf_btn}{legend_btn}{title_btn}</div>
+  <p style="font-size:11.5px;color:#888;margin-bottom:10px;">
+    <strong>PNG</strong> reflects the current figure size and legend visibility.
+    &ensp;<strong>PDF</strong> is pre-rendered at a fixed size (900&times;520&nbsp;px) with the
+    legend always shown &mdash; resize and legend-toggle have no effect on it.
+  </p>
   <div class="legend-text" style="margin-bottom:10px;">{legend}</div>
   <div class="figure-plot">{fig_div}</div>
 </div>
 """
 
 
-def table_section(section_id: str, title: str, table_html: str,
-                  csv_b64: str, csv_name: str, legend: str,
-                  excel_b64: str = None, excel_name: str = None) -> str:
-    """Render a complete table block with download buttons and a legend."""
-    btns = download_btn("⬇ Download CSV", csv_b64, csv_name, "text/csv", "btn-csv")
-    if excel_b64:
-        btns += "\n    " + download_btn(
-            "⬇ Download Excel (both tables)", excel_b64, excel_name,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "btn-excel",
-        )
+def table_section(section_id: str, title: str, table_html: str, legend: str,
+                  download_bar_html: str = "") -> str:
+    """Render a complete table block with an optional download bar and legend."""
+    bar = f'<div class="download-bar" style="margin-top:10px;">{download_bar_html}</div>' \
+          if download_bar_html else ""
     return f"""\
 <div id="{section_id}" style="margin-bottom:28px;">
   <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;">{title}</h3>
   <div class="table-wrap">{table_html}</div>
-  <div class="download-bar">{btns}</div>
+  {bar}
   <div class="legend-text">{legend}</div>
 </div>
 """
 
 
 def build_html(figures: list[dict], table1_html: str, table2_html: str,
-               t1_csv_b64: str, t2_csv_b64: str, excel_b64: str) -> str:
+               t1_csv_b64: str, t2_csv_b64: str, excel_b64: str,
+               corr_figures: list[dict] | None = None,
+               corr_table_html: str = "") -> str:
     """Assemble the full HTML report string."""
+    n_box = len(figures)
     fig_sections = "\n".join(
         figure_section(
             i + 1, f["title"], f["div"], f["pdf_b64"],
@@ -708,15 +966,62 @@ def build_html(figures: list[dict], table1_html: str, table2_html: str,
 
     t1_section = table_section(
         "table1", "Table 1 \u2014 Summary Statistics",
-        table1_html, t1_csv_b64, "table1_summary.csv",
-        TABLE_LEGENDS["table1"],
-        excel_b64, "tables_summary.xlsx",
+        table1_html, TABLE_LEGENDS["table1"],
+    )
+    xlsx_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    t2_btns = (
+        download_btn("\u2b07 Table 1 \u2014 CSV",  t1_csv_b64, "table1_summary.csv",       "text/csv",  "btn-csv")
+        + download_btn("\u2b07 Table 2 \u2014 CSV",  t2_csv_b64, "table2_per_question.csv",   "text/csv",  "btn-csv")
+        + download_btn("\u2b07 Both Tables \u2014 Excel", excel_b64, "tables_summary.xlsx", xlsx_mime, "btn-excel")
     )
     t2_section = table_section(
         "table2", "Table 2 \u2014 Per-question Correctness by Group",
-        table2_html, t2_csv_b64, "table2_per_question.csv",
-        TABLE_LEGENDS["table2"],
+        table2_html, TABLE_LEGENDS["table2"],
+        download_bar_html=t2_btns,
     )
+
+    # ── Correlation section ──────────────────────────────────────────────────
+    corr_section = ""
+    sidebar_corr = ""
+    if corr_figures:
+        corr_fig_sections = "\n".join(
+            figure_section(
+                n_box + i + 1, f["title"], f["div"], f["pdf_b64"],
+                f["pdf_filename"], f["png_filename"], f["legend"],
+                show_legend_btn=False,
+            )
+            for i, f in enumerate(corr_figures)
+        )
+        t3_section = table_section(
+            "table3", "Table 3 \u2014 Spearman Correlation Summary",
+            corr_table_html, TABLE_LEGENDS["table3"],
+        )
+        corr_section = f"""\
+    <!-- Correlation Analysis -->
+    <section class="section" id="correlations">
+      <h2>Correlation Analysis</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:20px;">
+        Scatter plots show the relationship between average pre-assessment self-rated
+        confidence and total correct responses. Spearman &rho; and p-value are annotated
+        in the upper-right corner of each plot. Each point represents one participant.
+        <strong>Color key (per-group plots):</strong>&nbsp;
+        <span class="chip" style="background:#F8766D;"></span>No Resource&ensp;
+        <span class="chip" style="background:#CD9600;"></span>PDF&ensp;
+        <span class="chip" style="background:#00A9FF;"></span>ChatGPT
+      </p>
+      {corr_fig_sections}
+      <div style="margin-top:32px;">
+        {t3_section}
+      </div>
+    </section>"""
+        sidebar_corr_figs = "\n".join(
+            f'    <li class="sub"><a href="#fig{n_box + i + 1}">Fig {n_box + i + 1}: {f["short"]}</a></li>'
+            for i, f in enumerate(corr_figures)
+        )
+        sidebar_corr = f"""\
+        <li class="section-head"><a href="#correlations">Correlations</a></li>
+        <li class="sub"><a href="#table3">Table 3</a></li>
+{sidebar_corr_figs}"""
 
     sidebar_figs = "\n".join(
         f'    <li class="sub"><a href="#fig{i+1}">Fig {i+1}: {f["short"]}</a></li>'
@@ -748,6 +1053,7 @@ def build_html(figures: list[dict], table1_html: str, table2_html: str,
         <li class="sub"><a href="#table1">Table 1</a></li>
         <li class="sub"><a href="#table2">Table 2</a></li>
 {sidebar_figs}
+        {sidebar_corr}
       </ul>
     </nav>
   </aside>
@@ -801,6 +1107,8 @@ def build_html(figures: list[dict], table1_html: str, table2_html: str,
       </div>
     </section>
 
+    {corr_section}
+
   </main>
 </div>
 
@@ -843,6 +1151,55 @@ if __name__ == "__main__":
             "legend":       FIGURE_LEGENDS[i - 1],
         })
 
+    print("Building correlation scatter plots...")
+    X_COL    = "self_confidence_mean"
+    Y_COL    = "n_correct"
+    X_LABEL  = "Average Self-Assessment (0\u201310)"
+    Y_LABEL  = "Total Correct (out of 12)"
+
+    scatter_specs = [
+        ("All Participants",  df,                                      "#7CAE00",
+         "Confidence vs. Correct \u2014 All Participants",
+         "fig5_conf_vs_correct_all",       "Confidence vs. Correct (all)"),
+        ("No Resource",       df[df["group_label"] == "No Resource"],  "#F8766D",
+         "Confidence vs. Correct \u2014 No Resource",
+         "fig6_conf_vs_correct_noresource", "Confidence vs. Correct (No Resource)"),
+        ("PDF",               df[df["group_label"] == "PDF"],          "#CD9600",
+         "Confidence vs. Correct \u2014 PDF",
+         "fig7_conf_vs_correct_pdf",        "Confidence vs. Correct (PDF)"),
+        ("ChatGPT",           df[df["group_label"] == "ChatGPT"],      "#00A9FF",
+         "Confidence vs. Correct \u2014 ChatGPT",
+         "fig8_conf_vs_correct_chatgpt",    "Confidence vs. Correct (ChatGPT)"),
+    ]
+
+    n_box = len(figures)
+    corr_figures_raw = []
+    for subset_label, df_sub, color, title, file_stem, short in scatter_specs:
+        valid = df_sub[[X_COL, Y_COL]].dropna()
+        rho, pval = spearmanr(valid[X_COL], valid[Y_COL])
+        fig = build_scatter(df_sub, X_COL, Y_COL, X_LABEL, Y_LABEL, title, color)
+        corr_figures_raw.append((fig, title, short, file_stem, subset_label, rho, pval))
+
+    print("Rendering correlation PDFs via kaleido...")
+    corr_figures = []
+    for i, (fig, title, short, file_stem, subset_label, rho, pval) in \
+            enumerate(corr_figures_raw, start=1):
+        fig_num = n_box + i
+        print(f"  Figure {fig_num}: {title}")
+        div_id = f"plotly-fig{fig_num}"
+        corr_figures.append({
+            "title":        title,
+            "short":        short,
+            "div":          fig_to_html_div(fig, div_id),
+            "pdf_b64":      fig_to_pdf_b64(fig),
+            "pdf_filename": f"{file_stem}.pdf",
+            "png_filename": f"{file_stem}.png",
+            "legend":       build_scatter_legend(fig_num, subset_label, rho, pval),
+        })
+
+    print("Building correlation table...")
+    corr_table_html = build_correlation_table(df)
+
     print("Encoding table assets...")
     table1_html = strip_style_tag(TABLE1_HTML.read_text(encoding="utf-8"))
     table2_html = strip_style_tag(TABLE2_HTML.read_text(encoding="utf-8"))
@@ -851,7 +1208,11 @@ if __name__ == "__main__":
     excel_b64   = b64_file(EXCEL_PATH)
 
     print("Assembling HTML...")
-    html = build_html(figures, table1_html, table2_html, t1_csv_b64, t2_csv_b64, excel_b64)
+    html = build_html(
+        figures, table1_html, table2_html, t1_csv_b64, t2_csv_b64, excel_b64,
+        corr_figures=corr_figures,
+        corr_table_html=corr_table_html,
+    )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     OUT_HTML.write_text(html, encoding="utf-8")

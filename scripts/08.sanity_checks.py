@@ -3,7 +3,7 @@
 -------------------
 Data integrity and statistical sanity checks for the dental trauma survey analysis.
 
-Runs five sections of checks against data/processed/survey_clean.csv and the
+Runs six sections of checks against data/processed/survey_clean.csv and the
 generated output tables. Prints PASS / FAIL / WARN for each check and exits
 with code 0 if all pass, 1 if any fail.
 
@@ -16,9 +16,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import re
+
 import numpy as np
 import pandas as pd
-from scipy.stats import chi2_contingency, kruskal, spearmanr
+from scipy.optimize import brentq
+from scipy.stats import chi2_contingency, kruskal, norm, spearmanr
 
 # ── Paths (relative to repo root) ────────────────────────────────────────────
 ROOT         = Path(__file__).resolve().parent.parent
@@ -26,6 +29,7 @@ DATA_CLEAN   = ROOT / "data" / "processed" / "survey_clean.csv"
 ANSWERS_PATH = ROOT / "data" / "raw" / "anonymised" / "answers_to_the_questions_form_questions.csv"
 TABLE2_PATH  = ROOT / "tables" / "table2_per_question.csv"
 TABLE3_PATH  = ROOT / "tables" / "table3_correlation.csv"
+PA_CSV_PATH  = ROOT / "tables" / "power_analysis_summary.csv"
 
 # ── Known constants (must match 01.data_pre_processing.ipynb exactly) ─────────
 QCODE_TO_COL = {
@@ -66,6 +70,10 @@ GROUP_ORDER     = ["No Resource", "PDF", "ChatGPT"]
 N_TOTAL         = 18
 N_ITEMS         = 12
 N_CORR_TESTS    = 4   # Bonferroni multiplier for Spearman correlations
+ALPHA           = 0.05
+ALPHA_BONF      = ALPHA / N_ITEMS   # ≈ 0.00417 (power analysis Bonferroni level)
+POWER_TARGET    = 0.80
+MAX_N           = 500
 
 EXPECTED_COLUMNS = [
     "duration_sec", "self_knowledge_tdi", "self_confidence_avulsion",
@@ -542,6 +550,199 @@ def check_cross_script_consistency(df: pd.DataFrame, table3: pd.DataFrame) -> No
         _pass(f"Table 2 Bonferroni adjustments use k={N_ITEMS} consistently")
 
 
+# ── Fisher z-transform helpers (must match 06.power_analysis.py) ──────────────
+
+def _spearman_power(rho: float, n: int, alpha: float = ALPHA) -> float:
+    """Power for two-sided test of H0: rho=0 via Fisher z-transform."""
+    if abs(rho) < 1e-6 or n <= 3:
+        return alpha
+    z_crit = norm.ppf(1.0 - alpha / 2.0)
+    z_rho  = np.arctanh(abs(rho))
+    lam    = np.sqrt(n - 3) * z_rho
+    return float(norm.cdf(lam - z_crit) + norm.cdf(-lam - z_crit))
+
+
+def _spearman_required_n(rho: float, alpha: float = ALPHA,
+                         power: float = POWER_TARGET) -> int | None:
+    if abs(rho) < 0.01:
+        return None
+    if _spearman_power(rho, MAX_N, alpha) < power:
+        return None
+    n_req = brentq(lambda n: _spearman_power(rho, n, alpha) - power,
+                   4.0, float(MAX_N))
+    return int(np.ceil(n_req))
+
+
+def _spearman_sensitivity(alpha: float = ALPHA,
+                          power: float = POWER_TARGET) -> float | None:
+    """Minimum |rho| detectable at N_TOTAL with given power."""
+    if _spearman_power(0.999, N_TOTAL, alpha) < power:
+        return None
+    return float(brentq(lambda rho: _spearman_power(rho, N_TOTAL, alpha) - power,
+                        0.001, 0.999))
+
+
+def _parse_rho_from_csv(obs_effect: str) -> float | None:
+    """Extract the numeric rho value from the 'Obs. effect' CSV column."""
+    m = re.search(r"[ρr]\s*=\s*([−\-]?\d+\.\d+)", obs_effect)
+    if m:
+        return float(m.group(1).replace("−", "-"))
+    return None
+
+
+def _parse_n_from_csv(req_n: str) -> int | None:
+    """Extract the integer N from the 'Req. total N' CSV column, None if > MAX_N."""
+    s = str(req_n).strip()
+    if s.startswith(">") or s.startswith("&gt;"):
+        return None
+    m = re.search(r"(\d+)", s)
+    return int(m.group(1)) if m else None
+
+
+def _parse_sensitivity_from_csv(min_det: str) -> float | None:
+    """Extract the sensitivity threshold from the 'Min detectable' CSV column."""
+    m = re.search(r"[≥>=]\s*(\d+\.\d+)", min_det)
+    return float(m.group(1)) if m else None
+
+
+# ── Section 6: Power analysis consistency ─────────────────────────────────────
+def check_power_analysis(df: pd.DataFrame) -> None:
+    _section("Section 6: Power Analysis Consistency")
+
+    if not PA_CSV_PATH.exists():
+        _warn(f"Power analysis CSV not found at {PA_CSV_PATH} — skipping section")
+        return
+
+    pa = pd.read_csv(PA_CSV_PATH)
+
+    # 6a. Expected shape
+    expected_analyses = [
+        "Kruskal-Wallis (total correct)",
+        "Chi-square per question (α=0.05)",
+        "Chi-square per question (α=0.0042, Bonferroni)",
+        "Spearman ρ (all participants)",
+        "Spearman ρ (all participants, α=0.0042 Bonferroni)",
+        "Spearman ρ (No Resource)",
+        "Spearman ρ (PDF)",
+        "Spearman ρ (ChatGPT)",
+    ]
+
+    if len(pa) == len(expected_analyses):
+        _pass(f"Power analysis CSV has {len(pa)} rows as expected")
+    else:
+        _fail(f"Power analysis CSV has {len(pa)} rows, expected {len(expected_analyses)}")
+
+    missing = [a for a in expected_analyses if a not in pa["Analysis"].values]
+    if not missing:
+        _pass("All expected analysis rows present in CSV")
+    else:
+        _fail(f"Missing analysis rows: {missing}")
+
+    # 6b. Verify Bonferroni alpha = 0.05 / 12
+    alpha_bonf_expected = ALPHA / N_ITEMS
+    if abs(ALPHA_BONF - alpha_bonf_expected) < 1e-8:
+        _pass(f"ALPHA_BONF = {ALPHA}/{N_ITEMS} = {ALPHA_BONF:.6f}")
+    else:
+        _fail(f"ALPHA_BONF mismatch: {ALPHA_BONF} != {ALPHA}/{N_ITEMS}")
+
+    # 6c. Re-derive Spearman rho from data and compare to CSV
+    rho_live, _ = spearmanr(df["self_confidence_mean"], df["n_correct"])
+    row_spr = pa[pa["Analysis"] == "Spearman ρ (all participants)"]
+    if not row_spr.empty:
+        csv_rho = _parse_rho_from_csv(row_spr["Obs. effect"].iloc[0])
+        if csv_rho is not None and abs(round(rho_live, 3) - csv_rho) < 0.002:
+            _pass(f"Spearman ρ from data ({rho_live:.4f}) matches CSV ({csv_rho:.3f})")
+        else:
+            _fail(f"Spearman ρ mismatch: live={rho_live:.4f}, CSV={csv_rho}")
+
+    # 6d. Re-derive sensitivity and required N for Spearman (α = 0.05)
+    sens_live   = _spearman_sensitivity(alpha=ALPHA)
+    req_n_live  = _spearman_required_n(rho_live, alpha=ALPHA)
+
+    if not row_spr.empty:
+        csv_sens = _parse_sensitivity_from_csv(
+            row_spr["Min detectable (at study n)"].iloc[0])
+        if csv_sens is not None and sens_live is not None:
+            if abs(sens_live - csv_sens) < 0.002:
+                _pass(f"Spearman sensitivity (α=0.05): live={sens_live:.3f}, CSV={csv_sens:.3f}")
+            else:
+                _fail(f"Spearman sensitivity mismatch (α=0.05): live={sens_live:.3f}, CSV={csv_sens:.3f}")
+
+        csv_req = _parse_n_from_csv(row_spr["Req. total N"].iloc[0])
+        if csv_req is not None and req_n_live is not None:
+            if csv_req == req_n_live:
+                _pass(f"Spearman required N (α=0.05): live={req_n_live}, CSV={csv_req}")
+            else:
+                _fail(f"Spearman required N mismatch (α=0.05): live={req_n_live}, CSV={csv_req}")
+
+    # 6e. Re-derive sensitivity and required N for Spearman (Bonferroni)
+    sens_bonf_live  = _spearman_sensitivity(alpha=ALPHA_BONF)
+    req_n_bonf_live = _spearman_required_n(rho_live, alpha=ALPHA_BONF)
+
+    row_spr_b = pa[pa["Analysis"].str.contains("Bonferroni") &
+                   pa["Analysis"].str.contains("all participants")]
+    if not row_spr_b.empty:
+        csv_sens_b = _parse_sensitivity_from_csv(
+            row_spr_b["Min detectable (at study n)"].iloc[0])
+        if csv_sens_b is not None and sens_bonf_live is not None:
+            if abs(sens_bonf_live - csv_sens_b) < 0.002:
+                _pass(f"Spearman sensitivity (Bonferroni): live={sens_bonf_live:.3f}, CSV={csv_sens_b:.3f}")
+            else:
+                _fail(f"Spearman sensitivity mismatch (Bonferroni): live={sens_bonf_live:.3f}, CSV={csv_sens_b:.3f}")
+
+        csv_req_b = _parse_n_from_csv(row_spr_b["Req. total N"].iloc[0])
+        if csv_req_b is not None and req_n_bonf_live is not None:
+            if csv_req_b == req_n_bonf_live:
+                _pass(f"Spearman required N (Bonferroni): live={req_n_bonf_live}, CSV={csv_req_b}")
+            else:
+                _fail(f"Spearman required N mismatch (Bonferroni): live={req_n_bonf_live}, CSV={csv_req_b}")
+
+    # 6f. Bonferroni corrections are strictly more conservative
+    if sens_live is not None and sens_bonf_live is not None:
+        if sens_bonf_live > sens_live:
+            _pass(f"Bonferroni sensitivity ({sens_bonf_live:.3f}) > unadjusted ({sens_live:.3f})")
+        else:
+            _fail(f"Bonferroni sensitivity ({sens_bonf_live:.3f}) should be > "
+                  f"unadjusted ({sens_live:.3f})")
+
+    if req_n_live is not None and req_n_bonf_live is not None:
+        if req_n_bonf_live > req_n_live:
+            _pass(f"Bonferroni required N ({req_n_bonf_live}) > unadjusted ({req_n_live})")
+        else:
+            _fail(f"Bonferroni required N ({req_n_bonf_live}) should be > "
+                  f"unadjusted ({req_n_live})")
+
+    # 6g. Fisher z-transform power spot-check at known N
+    power_at_18 = _spearman_power(rho_live, N_TOTAL, alpha=ALPHA)
+    if 0.0 < power_at_18 < 1.0:
+        _pass(f"Spearman power at N=18 is plausible: {power_at_18:.3f}")
+    else:
+        _fail(f"Spearman power at N=18 is implausible: {power_at_18}")
+
+    if req_n_live is not None:
+        power_at_req = _spearman_power(rho_live, req_n_live, alpha=ALPHA)
+        if abs(power_at_req - POWER_TARGET) < 0.02:
+            _pass(f"Power at required N={req_n_live} ≈ 0.80 ({power_at_req:.3f})")
+        else:
+            _fail(f"Power at required N={req_n_live} should ≈ 0.80, got {power_at_req:.3f}")
+
+    # 6h. Per-group Spearman rho in CSV matches live computation
+    for grp in GROUP_ORDER:
+        sub = df[df["group_label"] == grp]
+        if len(sub) < 3:
+            continue
+        rho_g, _ = spearmanr(sub["self_confidence_mean"], sub["n_correct"])
+        row_g = pa[pa["Analysis"] == f"Spearman ρ ({grp})"]
+        if row_g.empty:
+            _warn(f"No power analysis CSV row for group '{grp}'")
+            continue
+        csv_rho_g = _parse_rho_from_csv(row_g["Obs. effect"].iloc[0])
+        if csv_rho_g is not None and abs(round(rho_g, 3) - csv_rho_g) < 0.002:
+            _pass(f"Spearman ρ for '{grp}': live={rho_g:.3f}, CSV={csv_rho_g:.3f}")
+        else:
+            _fail(f"Spearman ρ mismatch for '{grp}': live={rho_g:.4f}, CSV={csv_rho_g}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main() -> None:
     print(f"\n{_BOLD}{'=' * 60}{_RESET}")
@@ -584,6 +785,7 @@ def main() -> None:
     check_derived_columns(df)
     check_statistics(df, table2, table3)
     check_cross_script_consistency(df, table3)
+    check_power_analysis(df)
 
     # Summary
     _section("Summary")

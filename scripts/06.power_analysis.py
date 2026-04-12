@@ -933,6 +933,7 @@ def build_fig_spearman(
     """
     req_ns = {
         "all": _spearman_required_n(rho_all),
+        "all_bonf": _spearman_required_n(rho_all, alpha=ALPHA_BONF),
         **{g: _spearman_required_n(v[0]) for g, v in group_rhos.items()},
     }
     finite_reqs = [n for n in req_ns.values() if n is not None]
@@ -949,6 +950,16 @@ def build_fig_spearman(
         mode="lines",
         line=dict(color=COLOR_SPEAR, width=2.5),
         name=f"All participants (\u03c1\u202f=\u202f{rho_all:.2f}, N\u202f=\u202f18)",
+    ))
+
+    # ── Overall curve Bonferroni ─────────────────────────────────────────────
+    powers_all_bonf = [_spearman_power(rho_all, float(n), alpha=ALPHA_BONF)
+                       for n in n_range]
+    fig.add_trace(go.Scatter(
+        x=n_range.tolist(), y=powers_all_bonf,
+        mode="lines",
+        line=dict(color=COLOR_SPEAR, width=2.5, dash="dot"),
+        name=f"\u03b1 = {ALPHA_BONF:.4f} (Bonferroni)",
     ))
 
     # ── Per-group curves ──────────────────────────────────────────────────────
@@ -979,8 +990,15 @@ def build_fig_spearman(
             _annotation_required_n(req_ns["all"], 0.80, COLOR_SPEAR,
                                    ax=-60, ay=-45)
         )
+    # Annotate required N for overall Bonferroni
+    if req_ns["all_bonf"] is not None:
+        annotations.append(
+            _annotation_required_n(req_ns["all_bonf"], 0.80, COLOR_SPEAR,
+                                   ax=55, ay=-45)
+        )
     # Annotate per-group required Ns where achievable
-    for g, n_req_g in {k: v for k, v in req_ns.items() if k != "all"}.items():
+    for g, n_req_g in {k: v for k, v in req_ns.items()
+                        if k not in ("all", "all_bonf")}.items():
         if n_req_g is not None:
             off = annot_offsets.get(g, dict(ax=-55, ay=-40))
             annotations.append(
@@ -1022,8 +1040,10 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
     req_n_chisq_u = _chisq_required_n(w, alpha=ALPHA)
     req_n_chisq_b = _chisq_required_n(w, alpha=ALPHA_BONF)
 
-    sens_rho  = _spearman_sensitivity()
-    req_n_rho = _spearman_required_n(rho)
+    sens_rho       = _spearman_sensitivity()
+    sens_rho_bonf  = _spearman_sensitivity(alpha=ALPHA_BONF)
+    req_n_rho      = _spearman_required_n(rho)
+    req_n_rho_bonf = _spearman_required_n(rho, alpha=ALPHA_BONF)
 
     def _n_per(total: int | None, k: int = K_GROUPS) -> str:
         if total is None:
@@ -1075,6 +1095,16 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
             "Min Detectable (at study n)": f"|\u03c1| \u2265 {sens_rho:.3f}<br><small>(N = 18)</small>"
                                            if sens_rho else "not achievable",
             "Req. Total N": _fmt_n(req_n_rho),
+            "Req. n/group": "N/A<br><small>(1 sample)</small>",
+        },
+        {
+            "Analysis": "Spearman correlation<br>(self-confidence vs correct,<br><em>all participants</em>,<br>\u03b1 = 0.0042 Bonferroni)",
+            "Test Approx.": "Fisher z-transform<br>(two-sided)",
+            "Obs. Effect": f"\u03c1 = {rho:.3f}",
+            "Effect Label": _cohen_rho_label(rho),
+            "Min Detectable (at study n)": f"|\u03c1| \u2265 {sens_rho_bonf:.3f}<br><small>(N = 18)</small>"
+                                           if sens_rho_bonf else "not achievable",
+            "Req. Total N": _fmt_n(req_n_rho_bonf),
             "Req. n/group": "N/A<br><small>(1 sample)</small>",
         },
     ]
@@ -1341,7 +1371,8 @@ def build_fig_legends(effects: dict) -> list[str]:
     req_n_kw    = _kw_required_n(f)
     req_n_chi_u = _chisq_required_n(w, alpha=ALPHA)
     req_n_chi_b = _chisq_required_n(w, alpha=ALPHA_BONF)
-    req_n_rho   = _spearman_required_n(rho)
+    req_n_rho     = _spearman_required_n(rho)
+    req_n_rho_b   = _spearman_required_n(rho, alpha=ALPHA_BONF)
 
     def _nstr(n: int | None) -> str:
         return f"N&nbsp;=&nbsp;{n}" if n else f"N&nbsp;&gt;&nbsp;{MAX_N}"
@@ -1390,10 +1421,12 @@ def build_fig_legends(effects: dict) -> list[str]:
         "(Fisher z-transform approximation).</strong> "
         "Each curve shows how power grows with sample size at the observed "
         "\u03c1 (used as a pilot estimate). "
-        f"<em>Solid green line</em> (all participants): "
+        f"<em>Solid green line</em> (all participants, \u03b1&nbsp;=&nbsp;0.05): "
         f"\u03c1&nbsp;=&nbsp;{rho:.2f} ({_cohen_rho_label(rho)} effect, "
         f"N&nbsp;=&nbsp;{N_TOTAL}); requires {_nstr(req_n_rho)}. "
-        "<em>Dotted lines</em> (per group): "
+        f"<em>Dotted green line</em> (all participants, Bonferroni "
+        f"\u03b1&nbsp;=&nbsp;{ALPHA_BONF:.4f}): requires {_nstr(req_n_rho_b)}. "
+        "<em>Dotted coloured lines</em> (per group): "
         + "; &ensp;".join(grp_parts) + ". "
         "The dashed horizontal line marks 80% power; the dashed vertical line "
         f"marks N&nbsp;=&nbsp;{N_TOTAL} (current total; per-group sizes are "
@@ -1591,7 +1624,8 @@ if __name__ == "__main__":
     sens_f   = _kw_sensitivity()
     sens_w_u = _chisq_sensitivity(alpha=ALPHA)
     sens_w_b = _chisq_sensitivity(alpha=ALPHA_BONF)
-    sens_rho = _spearman_sensitivity()
+    sens_rho   = _spearman_sensitivity()
+    sens_rho_b = _spearman_sensitivity(alpha=ALPHA_BONF)
     print(f"  KW  min f:              {sens_f:.4f}")
     print(f"  Chi min w (a=0.05):     {sens_w_u:.4f}")
     print(f"  Chi min w (Bonf):       {sens_w_b:.4f}")
@@ -1599,16 +1633,22 @@ if __name__ == "__main__":
         print(f"  Spr min |rho|:          {sens_rho:.4f}")
     else:
         print("  Spr min |rho|:          not achievable at N=18")
+    if sens_rho_b:
+        print(f"  Spr min |rho| (Bonf):   {sens_rho_b:.4f}")
+    else:
+        print("  Spr min |rho| (Bonf):   not achievable at N=18")
 
     print("\nComputing required N for 80% power at observed effects...")
     req_kw  = _kw_required_n(effects["cohens_f"])
     req_cu  = _chisq_required_n(effects["cohens_w_median"], alpha=ALPHA)
     req_cb  = _chisq_required_n(effects["cohens_w_median"], alpha=ALPHA_BONF)
-    req_rho = _spearman_required_n(effects["spearman_rho"])
+    req_rho  = _spearman_required_n(effects["spearman_rho"])
+    req_rhob = _spearman_required_n(effects["spearman_rho"], alpha=ALPHA_BONF)
     print(f"  KW  total N:               {req_kw or f'> {MAX_N}'}")
     print(f"  Chi total N (a=0.05):      {req_cu or f'> {MAX_N}'}")
     print(f"  Chi total N (Bonf):        {req_cb or f'> {MAX_N}'}")
     print(f"  Spearman total N:          {req_rho or f'> {MAX_N}'}")
+    print(f"  Spearman total N (Bonf):   {req_rhob or f'> {MAX_N}'}")
 
     print("\nBuilding summary table...")
     table_html, csv_str = build_summary_table(effects)
@@ -1623,7 +1663,7 @@ if __name__ == "__main__":
     legends = build_fig_legends(effects)
 
     # ── Shared x-axis range for all three figures ─────────────────────────────
-    _all_reqs = [req_kw, req_cu, req_cb, req_rho]
+    _all_reqs = [req_kw, req_cu, req_cb, req_rho, req_rhob]
     for rho_g, _, _ in effects["spearman_groups"].values():
         if not np.isnan(rho_g):
             _all_reqs.append(_spearman_required_n(rho_g))

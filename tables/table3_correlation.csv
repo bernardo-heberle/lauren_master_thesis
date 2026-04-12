@@ -1,0 +1,5 @@
+Subset,n,rho,p_value,p_bonferroni
+All Participants,18,0.35,0.149,0.595
+No Resource,7,0.93,0.003,0.011
+PDF,5,0.24,0.701,1.0
+ChatGPT,6,-0.09,0.866,1.0

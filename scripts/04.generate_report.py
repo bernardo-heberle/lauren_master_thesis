@@ -26,9 +26,11 @@ ROOT       = Path(__file__).parent.parent
 DATA_PATH  = ROOT / "data" / "processed" / "survey_clean.csv"
 TABLE1_HTML = ROOT / "tables" / "table1_summary.html"
 TABLE2_HTML = ROOT / "tables" / "table2_per_question.html"
-TABLE1_CSV  = ROOT / "tables" / "table1_summary.csv"
-TABLE2_CSV  = ROOT / "tables" / "table2_per_question.csv"
-EXCEL_PATH  = ROOT / "tables" / "tables_summary.xlsx"
+TABLE1_CSV   = ROOT / "tables" / "table1_summary.csv"
+TABLE2_CSV   = ROOT / "tables" / "table2_per_question.csv"
+TABLE3_CSV   = ROOT / "tables" / "table3_correlation.csv"
+TABLE3_EXCEL = ROOT / "tables" / "table3_correlation.xlsx"
+EXCEL_PATH   = ROOT / "tables" / "tables_summary.xlsx"
 OUT_DIR     = ROOT / "reports"
 OUT_HTML    = OUT_DIR / "thesis_results_report.html"
 
@@ -254,6 +256,7 @@ def build_correlation_table(df: pd.DataFrame) -> str:
     """
     Compute Spearman correlations between self_confidence_mean and n_correct
     for the full sample and each experimental group.
+    Includes Bonferroni-adjusted p-values (4 tests; adjusted α = 0.0125).
     Returns an HTML table string.
     """
     subsets = [
@@ -262,6 +265,7 @@ def build_correlation_table(df: pd.DataFrame) -> str:
         ("PDF",              df[df["group_label"] == "PDF"]),
         ("ChatGPT",          df[df["group_label"] == "ChatGPT"]),
     ]
+    n_tests = len(subsets)
 
     th = 'style="padding:7px 14px;text-align:center;background:#f0f3f8;font-weight:700;color:#1a1a1a;border:1px solid #d8dce3;"'
     th_left = 'style="padding:7px 14px;text-align:left;background:#f0f3f8;font-weight:700;color:#1a1a1a;border:1px solid #d8dce3;"'
@@ -274,6 +278,7 @@ def build_correlation_table(df: pd.DataFrame) -> str:
         f"<th {th}>n</th>"
         f"<th {th}>\u03c1 (rho)</th>"
         f"<th {th}>p-value</th>"
+        f"<th {th}>p (Bonferroni)</th>"
         f"</tr></thead>"
     )
 
@@ -285,15 +290,19 @@ def build_correlation_table(df: pd.DataFrame) -> str:
             rho, pval = spearmanr(valid["self_confidence_mean"], valid["n_correct"])
             rho_str  = f"{rho:.2f}"
             pval_str = "< 0.001" if pval < 0.001 else f"{pval:.3f}"
+            p_adj    = min(pval * n_tests, 1.0)
+            padj_str = "< 0.001" if p_adj < 0.001 else f"{p_adj:.3f}"
         else:
             rho_str  = "—"
             pval_str = "—"
+            padj_str = "—"
         rows.append(
             f"<tr>"
             f"<td {td_l}>{label}</td>"
             f"<td {td_c}>{n}</td>"
             f"<td {td_c}>{rho_str}</td>"
             f"<td {td_c}>{pval_str}</td>"
+            f"<td {td_c}>{padj_str}</td>"
             f"</tr>"
         )
 
@@ -304,6 +313,43 @@ def build_correlation_table(df: pd.DataFrame) -> str:
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table>"
     )
+
+
+def build_correlation_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build the Table 3 correlation results as a DataFrame.
+    Mirrors the subsets and logic used in build_correlation_table().
+    """
+    subsets = [
+        ("All Participants", df),
+        ("No Resource",      df[df["group_label"] == "No Resource"]),
+        ("PDF",              df[df["group_label"] == "PDF"]),
+        ("ChatGPT",          df[df["group_label"] == "ChatGPT"]),
+    ]
+    n_tests = len(subsets)
+    rows = []
+    for label, sub in subsets:
+        valid = sub[["self_confidence_mean", "n_correct"]].dropna()
+        n = len(valid)
+        if n >= 3:
+            rho, pval = spearmanr(valid["self_confidence_mean"], valid["n_correct"])
+            p_adj = min(pval * n_tests, 1.0)
+            rows.append({
+                "Subset":          label,
+                "n":               n,
+                "rho":             round(rho, 2),
+                "p_value":         round(pval, 3) if pval >= 0.001 else "<0.001",
+                "p_bonferroni":    round(p_adj, 3) if p_adj >= 0.001 else "<0.001",
+            })
+        else:
+            rows.append({
+                "Subset":       label,
+                "n":            n,
+                "rho":          None,
+                "p_value":      None,
+                "p_bonferroni": None,
+            })
+    return pd.DataFrame(rows)
 
 
 def fig_to_html_div(fig: go.Figure, div_id: str) -> str:
@@ -393,7 +439,8 @@ self-assessment score was the mean of three 0&ndash;10 Likert ratings completed 
 assessment: self-rated TDI knowledge, avulsion management confidence, and fracture management
 confidence. Correlations were computed for the full sample (n&nbsp;=&nbsp;18) and separately
 within each experimental group (No Resource n&nbsp;=&nbsp;7, PDF n&nbsp;=&nbsp;5,
-ChatGPT n&nbsp;=&nbsp;6). A small uniform jitter (&plusmn;0.15 units) was applied to both
+ChatGPT n&nbsp;=&nbsp;6); p-values were adjusted for multiple comparisons using the
+Bonferroni correction (4 tests; adjusted &alpha;&nbsp;=&nbsp;0.0125). A small uniform jitter (&plusmn;0.15 units) was applied to both
 axes to reduce overplotting of identical values. Axis ranges were fixed across all four
 scatter plots (x: 0&ndash;10; y: 0&ndash;12) to allow direct visual comparison across
 subsets.
@@ -443,7 +490,9 @@ TABLE_LEGENDS = {
         "pre-assessment self-rated confidence (0&ndash;10 scale; mean of TDI knowledge, "
         "avulsion confidence, and fracture confidence ratings) and the number of correct "
         "responses (out of 12), computed for the full sample and separately within each "
-        "experimental group. &rho;&nbsp;=&nbsp;Spearman rho. "
+        "experimental group. &rho;&nbsp;=&nbsp;Spearman rho. P-values were adjusted for "
+        "multiple comparisons using the Bonferroni correction (4 tests; adjusted "
+        "&alpha;&nbsp;=&nbsp;0.0125). "
         "Groups: No Resource n&nbsp;=&nbsp;7, PDF n&nbsp;=&nbsp;5, ChatGPT n&nbsp;=&nbsp;6."
     ),
 }
@@ -486,12 +535,15 @@ FIGURE_LEGENDS = [
 ]
 
 
-def build_scatter_legend(fig_num: int, subset_label: str, rho: float, pval: float) -> str:
+def build_scatter_legend(fig_num: int, subset_label: str, rho: float,
+                         pval: float, pval_adj: float) -> str:
     """
     Build the HTML legend string for a correlation scatter plot.
-    Includes subset description, Spearman rho, and p-value.
+    Includes subset description, Spearman rho, raw p-value, and
+    Bonferroni-adjusted p-value.
     """
     pval_str = "< 0.001" if pval < 0.001 else f"= {pval:.3f}"
+    padj_str = "< 0.001" if pval_adj < 0.001 else f"= {pval_adj:.3f}"
     return (
         f"<strong>Figure {fig_num}. Average self-rated confidence vs. total correct "
         f"({subset_label}).</strong> "
@@ -499,7 +551,8 @@ def build_scatter_legend(fig_num: int, subset_label: str, rho: float, pval: floa
         f"x-axis: average pre-assessment self-assessment score (mean of TDI knowledge, "
         f"avulsion confidence, and fracture confidence ratings, each 0&ndash;10). "
         f"y-axis: number of correct responses (out of 12). "
-        f"Spearman &rho;&nbsp;=&nbsp;{rho:.2f}, p&nbsp;{pval_str}."
+        f"Spearman &rho;&nbsp;=&nbsp;{rho:.2f}, p&nbsp;{pval_str}, "
+        f"p<sub>Bonferroni</sub>&nbsp;{padj_str}."
     )
 
 
@@ -953,7 +1006,8 @@ def table_section(section_id: str, title: str, table_html: str, legend: str,
 def build_html(figures: list[dict], table1_html: str, table2_html: str,
                t1_csv_b64: str, t2_csv_b64: str, excel_b64: str,
                corr_figures: list[dict] | None = None,
-               corr_table_html: str = "") -> str:
+               corr_table_html: str = "",
+               t3_csv_b64: str = "", t3_excel_b64: str = "") -> str:
     """Assemble the full HTML report string."""
     n_box = len(figures)
     fig_sections = "\n".join(
@@ -995,6 +1049,11 @@ def build_html(figures: list[dict], table1_html: str, table2_html: str,
         t3_section = table_section(
             "table3", "Table 3 \u2014 Spearman Correlation Summary",
             corr_table_html, TABLE_LEGENDS["table3"],
+            download_bar_html=(
+                download_btn("\u2b07 Table 3 \u2014 CSV",   t3_csv_b64,   "table3_correlation.csv",   "text/csv",  "btn-csv")
+                + download_btn("\u2b07 Table 3 \u2014 Excel", t3_excel_b64, "table3_correlation.xlsx",
+                               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "btn-excel")
+            ) if t3_csv_b64 else "",
         )
         corr_section = f"""\
     <!-- Correlation Analysis -->
@@ -1173,16 +1232,18 @@ if __name__ == "__main__":
     ]
 
     n_box = len(figures)
+    n_corr_tests = len(scatter_specs)
     corr_figures_raw = []
     for subset_label, df_sub, color, title, file_stem, short in scatter_specs:
         valid = df_sub[[X_COL, Y_COL]].dropna()
         rho, pval = spearmanr(valid[X_COL], valid[Y_COL])
+        pval_adj = min(pval * n_corr_tests, 1.0)
         fig = build_scatter(df_sub, X_COL, Y_COL, X_LABEL, Y_LABEL, title, color)
-        corr_figures_raw.append((fig, title, short, file_stem, subset_label, rho, pval))
+        corr_figures_raw.append((fig, title, short, file_stem, subset_label, rho, pval, pval_adj))
 
     print("Rendering correlation PDFs via kaleido...")
     corr_figures = []
-    for i, (fig, title, short, file_stem, subset_label, rho, pval) in \
+    for i, (fig, title, short, file_stem, subset_label, rho, pval, pval_adj) in \
             enumerate(corr_figures_raw, start=1):
         fig_num = n_box + i
         print(f"  Figure {fig_num}: {title}")
@@ -1194,24 +1255,32 @@ if __name__ == "__main__":
             "pdf_b64":      fig_to_pdf_b64(fig),
             "pdf_filename": f"{file_stem}.pdf",
             "png_filename": f"{file_stem}.png",
-            "legend":       build_scatter_legend(fig_num, subset_label, rho, pval),
+            "legend":       build_scatter_legend(fig_num, subset_label, rho, pval, pval_adj),
         })
 
     print("Building correlation table...")
     corr_table_html = build_correlation_table(df)
+    corr_df         = build_correlation_dataframe(df)
+    corr_df.to_csv(TABLE3_CSV, index=False)
+    corr_df.to_excel(TABLE3_EXCEL, index=False, sheet_name="Table3_Correlation")
+    print(f"  Saved {TABLE3_CSV.name} and {TABLE3_EXCEL.name}")
 
     print("Encoding table assets...")
-    table1_html = strip_style_tag(TABLE1_HTML.read_text(encoding="utf-8"))
-    table2_html = strip_style_tag(TABLE2_HTML.read_text(encoding="utf-8"))
-    t1_csv_b64  = b64_file(TABLE1_CSV)
-    t2_csv_b64  = b64_file(TABLE2_CSV)
-    excel_b64   = b64_file(EXCEL_PATH)
+    table1_html  = strip_style_tag(TABLE1_HTML.read_text(encoding="utf-8"))
+    table2_html  = strip_style_tag(TABLE2_HTML.read_text(encoding="utf-8"))
+    t1_csv_b64   = b64_file(TABLE1_CSV)
+    t2_csv_b64   = b64_file(TABLE2_CSV)
+    t3_csv_b64   = b64_file(TABLE3_CSV)
+    t3_excel_b64 = b64_file(TABLE3_EXCEL)
+    excel_b64    = b64_file(EXCEL_PATH)
 
     print("Assembling HTML...")
     html = build_html(
         figures, table1_html, table2_html, t1_csv_b64, t2_csv_b64, excel_b64,
         corr_figures=corr_figures,
         corr_table_html=corr_table_html,
+        t3_csv_b64=t3_csv_b64,
+        t3_excel_b64=t3_excel_b64,
     )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)

@@ -464,6 +464,11 @@ All figures were generated using Plotly&nbsp;6.7 and are interactive — hover o
 for exact values, and use the camera icon in the toolbar to export a PNG at the current
 display size.
 </p>
+<p>
+<strong>Code availability.</strong> All analysis scripts are publicly available at
+<a href="https://github.com/bernardo-heberle/lauren_master_thesis" target="_blank">
+github.com/bernardo-heberle/lauren_master_thesis</a>.
+</p>
 """
 
 # ── Table legends ─────────────────────────────────────────────────────────────

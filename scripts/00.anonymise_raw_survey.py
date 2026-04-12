@@ -28,7 +28,13 @@ score, randomisation group, and block progress.
 
 Usage
 -----
-    python scripts/anonymise_raw_survey.py
+    python scripts/00.anonymise_raw_survey.py
+
+Pipeline position
+-----------------
+**Step 0 of the analysis pipeline.**  Run once before any other script or
+notebook.  All subsequent notebooks read from the anonymised output written
+by this script (data/raw/anonymised/dental_trauma_survey_responses.csv).
 """
 
 import csv
@@ -229,6 +235,9 @@ def verify_integrity(
 
 
 if __name__ == "__main__":
+    # ── Pipeline: Step 0 ─────────────────────────────────────────────────────
+    # Read raw Qualtrics export → drop PII columns → write anonymised CSV.
+    # Integrity checks verify no data rows were lost or corrupted.
     print(f"Loading: {RAW_FILE}")
     df_raw, meta = load_qualtrics(RAW_FILE)
     print(f"  {len(df_raw)} responses, {df_raw.shape[1]} columns")

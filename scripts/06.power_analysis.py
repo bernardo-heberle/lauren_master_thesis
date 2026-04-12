@@ -1239,102 +1239,92 @@ annotated required N makes visually explicit the sample size shortfall.
 FORMAL_METHODS = """\
 <h3>Effect Size Measures</h3>
 <p>
-Three standardised effect size indices are used, one per test family:
+Three standardised effect size indices are reported, one for each statistical
+test used in the main study. Standardised effect sizes express the magnitude of
+an observed difference or association on a scale that is independent of sample
+size, allowing meaningful comparison across studies.
 </p>
 <ul style="margin: 6px 0 12px 24px;">
   <li style="margin-bottom:6px;">
-    <strong>Cohen&rsquo;s <em>f</em></strong> (Kruskal-Wallis / one-way ANOVA):
-    defined as <em>f</em>&nbsp;=&nbsp;&sigma;<sub>m</sub>&nbsp;/&nbsp;&sigma;,
-    the ratio of the standard deviation of group means to the within-group
-    standard deviation, or equivalently
-    f&nbsp;=&nbsp;&radic;(&eta;<sup>2</sup>&nbsp;/&nbsp;(1&nbsp;&minus;&nbsp;&eta;<sup>2</sup>)).
-    Conventional thresholds (Cohen, 1988): small 0.10, medium 0.25, large 0.40.
+    <strong>Cohen&rsquo;s <em>f</em></strong> (Kruskal-Wallis group comparison):
+    reflects how much the average knowledge scores differ across the three
+    groups relative to the variability within groups. A value of 0 indicates
+    no group differences; larger values indicate greater separation between
+    groups. Conventional benchmarks (Cohen, 1988):
+    small&nbsp;=&nbsp;0.10, medium&nbsp;=&nbsp;0.25, large&nbsp;=&nbsp;0.40.
   </li>
   <li style="margin-bottom:6px;">
-    <strong>Cohen&rsquo;s <em>w</em></strong> (chi-square independence test):
-    defined as
-    w&nbsp;=&nbsp;&radic;(&chi;<sup>2</sup>&nbsp;/&nbsp;N)&nbsp;=&nbsp;&radic;(&sum;<sub>i</sub>
-    (p<sub>observed,i</sub>&nbsp;&minus;&nbsp;p<sub>expected,i</sub>)<sup>2</sup>&nbsp;/&nbsp;p<sub>expected,i</sub>),
-    a normalised measure of the distance between observed and expected cell
-    proportions. Conventional thresholds: small 0.10, medium 0.30, large 0.50.
+    <strong>Cohen&rsquo;s <em>w</em></strong> (chi-square per-question test):
+    reflects how much the pattern of correct and incorrect answers across
+    groups deviates from what would be expected by chance alone. Conventional
+    benchmarks: small&nbsp;=&nbsp;0.10, medium&nbsp;=&nbsp;0.30,
+    large&nbsp;=&nbsp;0.50.
   </li>
   <li>
-    <strong>Spearman&rsquo;s <em>&rho;</em></strong> (rank correlation):
-    the rank-order correlation between self-confidence and knowledge score,
-    ranging from &minus;1 to +1. For power purposes the same conventional
-    thresholds as Pearson&rsquo;s r apply: small 0.10, medium 0.30, large 0.50.
+    <strong>Spearman&rsquo;s <em>&rho;</em></strong> (rank-order correlation):
+    the strength and direction of the association between self-rated confidence
+    and number of correct answers, ranging from &minus;1 (perfect negative
+    association) to +1 (perfect positive association). Conventional benchmarks:
+    small&nbsp;=&nbsp;0.10, medium&nbsp;=&nbsp;0.30, large&nbsp;=&nbsp;0.50.
   </li>
 </ul>
 
-<h3>Power Analysis Framework</h3>
+<h3>Power Analysis Approach</h3>
 <p>
-Post-hoc observed power was not computed, as it is mathematically redundant with
-the p-value and provides no independent information about study replication
+Post-hoc observed power was not reported. Computing power from the same data
+used to obtain the p-value is circular: it simply re-expresses the p-value in a
+different form and adds no new information about the study
 (Hoenig &amp; Heisey, 2001, <em>The American Statistician</em>, 55:19&ndash;24).
-Instead, two prospective analyses were performed for each of the three test
-families employed in the main study.
+Instead, two prospective analyses were carried out for each statistical test:
 </p>
+<ol style="margin: 6px 0 12px 24px;">
+  <li style="margin-bottom:6px;">
+    <strong>Sensitivity analysis:</strong> The smallest effect size that could
+    have been reliably detected (80% power) given the 18 participants enrolled
+    and a significance threshold of &alpha;&nbsp;=&nbsp;0.05. For the
+    Bonferroni-corrected per-question comparisons the adjusted threshold
+    &alpha;&nbsp;=&nbsp;0.0042 (0.05&nbsp;&divide;&nbsp;12 tests) was applied.
+  </li>
+  <li>
+    <strong>Prospective sample size estimation:</strong> The number of
+    participants a future, adequately powered study would need to detect the
+    same effect sizes observed here, at 80% power. These figures are
+    <em>planning estimates</em> derived from a small pilot; they carry
+    substantial uncertainty and should not be interpreted as precise targets.
+  </li>
+</ol>
 
-<h3>Sensitivity Analysis</h3>
+<h3>Statistical Methods</h3>
 <p>
-The minimum detectable effect size (MDE) was computed at the current study's
-sample sizes (N&nbsp;=&nbsp;18; groups of 7, 5, and 6) with a two-sided
-type&nbsp;I error rate of &alpha;&nbsp;=&nbsp;0.05 and target power
-1&nbsp;&minus;&nbsp;&beta;&nbsp;=&nbsp;0.80. For the Bonferroni-adjusted
-per-question comparisons, the adjusted threshold
-&alpha;&nbsp;=&nbsp;0.0042 (0.05&nbsp;&divide;&nbsp;12 tests) was used. Because
-group sizes are unequal, the harmonic mean of the three group sizes
-(<em>n<sub>h</sub></em>&nbsp;&asymp;&nbsp;5.89) was used as the effective
-per-group sample size for the one-way ANOVA approximation. For per-group
-Spearman analyses, the MDE was computed at each group&rsquo;s own n (7, 5, 6).
-</p>
-
-<h3>Prospective Sample Size Estimation</h3>
-<p>
-Observed effect sizes from the pilot data were used as point estimates to
-determine the total N required for 80% power in a future study with equal group
-sizes. These estimates are subject to pilot study variability and should be
-interpreted with caution; they are intended to inform planning, not to guarantee
-replication. Required Ns exceeding {max_n} are reported as
-"&gt;&nbsp;{max_n}."
-</p>
-
-<h3>Test-Specific Approximations</h3>
-<p>
-<strong>Kruskal-Wallis H-test</strong> power was approximated via the equivalent
-one-way ANOVA F-test
-(<code>statsmodels.stats.power.FTestAnovaPower</code>; k&nbsp;=&nbsp;3 groups).
-Cohen&rsquo;s f was computed from the observed group means and pooled within-group
-standard deviation of total correct responses; the relationship is
-f&nbsp;=&nbsp;&radic;(&eta;<sup>2</sup>&nbsp;/&nbsp;(1&nbsp;&minus;&nbsp;&eta;<sup>2</sup>)).
+Power for the <strong>Kruskal-Wallis H-test</strong> was estimated using the
+one-way ANOVA approximation, which is standard practice for this non-parametric
+test. The effect size (Cohen&rsquo;s f) was derived from the observed group
+means on total correct responses.
 </p>
 <p>
-<strong>Chi-square independence test</strong> (per-question 2&times;3 tables,
-df&nbsp;=&nbsp;2) power was computed using
-<code>statsmodels.stats.power.GofChisquarePower</code>.
-Cohen&rsquo;s w was derived from the observed chi-square statistic as
-w&nbsp;=&nbsp;&radic;(&chi;<sup>2</sup>&nbsp;/&nbsp;N); the median w across all
-12 questions was used as the representative effect size. Separate power curves
-are shown for the unadjusted (&alpha;&nbsp;=&nbsp;0.05, solid line) and
-Bonferroni-adjusted (&alpha;&nbsp;=&nbsp;0.0042, dashed line) thresholds.
+Power for the <strong>chi-square independence tests</strong> (one per knowledge
+question, 2&times;3 contingency table) was computed using the non-central
+chi-square distribution. The median Cohen&rsquo;s w across the 12 questions
+was used as the representative effect size. Two significance thresholds are
+shown: the unadjusted &alpha;&nbsp;=&nbsp;0.05 (solid curve) and the
+Bonferroni-adjusted &alpha;&nbsp;=&nbsp;0.0042 (dashed curve).
 </p>
 <p>
-<strong>Spearman rank-order correlation</strong> power was approximated via
-the Fisher z-transformation: z&prime;&nbsp;=&nbsp;arctanh(&rho;),
-SE(z&prime;)&nbsp;=&nbsp;1/&radic;(N&minus;3), non-centrality
-&lambda;&nbsp;=&nbsp;&radic;(N&minus;3)&nbsp;&times;&nbsp;z&prime;. Power was
-then evaluated as the probability of exceeding the two-sided critical value of
-the standard normal distribution under the non-central distribution.
-Two levels of analysis are reported: (1)&nbsp;the full-sample
-&rho; (all 18 participants, solid green curve in Figure&nbsp;3), and
-(2)&nbsp;per-group &rho; values for No&nbsp;Resource (n&nbsp;=&nbsp;7),
-PDF (n&nbsp;=&nbsp;5), and ChatGPT (n&nbsp;=&nbsp;6), shown as
-dotted curves in their respective group colours. Per-group estimates are
-based on very small subsamples and carry substantial sampling uncertainty.
+Power for the <strong>Spearman rank-order correlation</strong> was estimated
+using the Fisher z-transformation, a standard approximation for correlation
+tests. Two levels of analysis are reported: the full-sample correlation
+(all 18 participants, solid curve in Figure&nbsp;3) and per-group correlations
+for No&nbsp;Resource (n&nbsp;=&nbsp;7), PDF (n&nbsp;=&nbsp;5), and
+ChatGPT (n&nbsp;=&nbsp;6), shown as dotted curves. Per-group estimates are
+based on very small subsamples and should be interpreted with particular caution.
 </p>
 <p>
-All calculations used Python&nbsp;3.12 with
-<em>statsmodels</em>&nbsp;0.14 and <em>scipy</em>&nbsp;1.17.
+All analyses were conducted in Python&nbsp;3.12.
+</p>
+<p>
+<strong>Code availability.</strong> All analysis scripts are publicly available at
+<a href="https://github.com/bernardo-heberle/lauren_master_thesis" target="_blank">
+github.com/bernardo-heberle/lauren_master_thesis</a>.
 </p>
 """.format(max_n=MAX_N)
 

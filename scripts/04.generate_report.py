@@ -402,7 +402,7 @@ body {
 /* ── Main content ── */
 .content {
     flex: 1;
-    max-width: 960px;
+    min-width: 0;
     padding: 40px 48px 60px 48px;
 }
 
@@ -668,9 +668,9 @@ def figure_section(fig_num: int, title: str, fig_div: str, pdf_b64: str,
 <div class="figure-block" id="fig{fig_num}">
   <h3>Figure {fig_num} \u2014 {title}</h3>
   {resize}
+  <div class="download-bar" style="margin-bottom:10px;">{png_btn}{pdf_btn}</div>
+  <div class="legend-text" style="margin-bottom:10px;">{legend}</div>
   <div class="figure-plot">{fig_div}</div>
-  <div class="download-bar" style="margin-top:10px;">{png_btn}{pdf_btn}</div>
-  <div class="legend-text">{legend}</div>
 </div>
 """
 

@@ -37,9 +37,11 @@ CSV_OUT  = ROOT / "tables" / "power_analysis_summary.csv"
 GROUP_NS     = [7, 5, 6]     # No Resource, PDF, ChatGPT
 N_TOTAL      = 18
 K_GROUPS     = 3
-N_ITEMS      = 12            # knowledge items (Bonferroni denominator)
+N_ITEMS      = 12            # knowledge items (chi-square Bonferroni denominator)
+N_SPEAR_TESTS = 4            # Spearman tests (1 overall + 3 groups)
 ALPHA        = 0.05
-ALPHA_BONF   = ALPHA / N_ITEMS   # ≈ 0.00417
+ALPHA_BONF   = ALPHA / N_ITEMS    # ≈ 0.00417  (chi-square family)
+ALPHA_BONF_SPEAR = ALPHA / N_SPEAR_TESTS  # = 0.0125  (Spearman family)
 POWER_TARGET = 0.80
 MAX_N        = 500           # cap for displaying "N > 500" in table
 
@@ -933,9 +935,9 @@ def build_fig_spearman(
     """
     req_ns = {
         "all": _spearman_required_n(rho_all),
-        "all_bonf": _spearman_required_n(rho_all, alpha=ALPHA_BONF),
+        "all_bonf": _spearman_required_n(rho_all, alpha=ALPHA_BONF_SPEAR),
         **{g: _spearman_required_n(v[0]) for g, v in group_rhos.items()},
-        **{f"{g}_bonf": _spearman_required_n(v[0], alpha=ALPHA_BONF)
+        **{f"{g}_bonf": _spearman_required_n(v[0], alpha=ALPHA_BONF_SPEAR)
            for g, v in group_rhos.items()},
     }
     finite_reqs = [n for n in req_ns.values() if n is not None]
@@ -955,13 +957,13 @@ def build_fig_spearman(
     ))
 
     # ── Overall curve Bonferroni ─────────────────────────────────────────────
-    powers_all_bonf = [_spearman_power(rho_all, float(n), alpha=ALPHA_BONF)
+    powers_all_bonf = [_spearman_power(rho_all, float(n), alpha=ALPHA_BONF_SPEAR)
                        for n in n_range]
     fig.add_trace(go.Scatter(
         x=n_range.tolist(), y=powers_all_bonf,
         mode="lines",
         line=dict(color=COLOR_SPEAR, width=2.5, dash="dot"),
-        name=f"\u03b1 = {ALPHA_BONF:.4f} (Bonferroni)",
+        name=f"\u03b1 = {ALPHA_BONF_SPEAR:.4f} (Bonferroni)",
     ))
 
     # ── Per-group curves ──────────────────────────────────────────────────────
@@ -989,7 +991,7 @@ def build_fig_spearman(
             name=f"{g} (\u03c1\u202f=\u202f{rho_g:.2f}, n\u202f=\u202f{n_g})",
         ))
         # Bonferroni α (dotted)
-        powers_g_bonf = [_spearman_power(rho_g, float(n), alpha=ALPHA_BONF)
+        powers_g_bonf = [_spearman_power(rho_g, float(n), alpha=ALPHA_BONF_SPEAR)
                          for n in n_range]
         fig.add_trace(go.Scatter(
             x=n_range.tolist(), y=powers_g_bonf,
@@ -1066,9 +1068,9 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
     req_n_chisq_b = _chisq_required_n(w, alpha=ALPHA_BONF)
 
     sens_rho       = _spearman_sensitivity()
-    sens_rho_bonf  = _spearman_sensitivity(alpha=ALPHA_BONF)
+    sens_rho_bonf  = _spearman_sensitivity(alpha=ALPHA_BONF_SPEAR)
     req_n_rho      = _spearman_required_n(rho)
-    req_n_rho_bonf = _spearman_required_n(rho, alpha=ALPHA_BONF)
+    req_n_rho_bonf = _spearman_required_n(rho, alpha=ALPHA_BONF_SPEAR)
 
     def _n_per(total: int | None, k: int = K_GROUPS) -> str:
         if total is None:
@@ -1123,7 +1125,7 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
             "Req. n/group": "N/A<br><small>(1 sample)</small>",
         },
         {
-            "Analysis": "Spearman correlation<br>(self-confidence vs correct,<br><em>all participants</em>,<br>\u03b1 = 0.0042 Bonferroni)",
+            "Analysis": "Spearman correlation<br>(self-confidence vs correct,<br><em>all participants</em>,<br>\u03b1 = 0.0125 Bonferroni)",
             "Test Approx.": "Fisher z-transform<br>(two-sided)",
             "Obs. Effect": f"\u03c1 = {rho:.3f}",
             "Effect Label": _cohen_rho_label(rho),
@@ -1143,7 +1145,7 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
                  f'border-radius:2px;background:{HUE_PALETTE[g]};'
                  f'vertical-align:middle;margin-right:4px;"></span>')
         req_n_g      = _spearman_required_n(rho_g)
-        req_n_g_bonf = _spearman_required_n(rho_g, alpha=ALPHA_BONF)
+        req_n_g_bonf = _spearman_required_n(rho_g, alpha=ALPHA_BONF_SPEAR)
         rows_data.append({
             "Analysis": (f"{chip}Spearman ({g})<br>"
                          f"<small>(self-confidence vs correct)</small>"),
@@ -1157,12 +1159,12 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
         })
         rows_data.append({
             "Analysis": (f"{chip}Spearman ({g},<br>"
-                         f"\u03b1\u202f=\u202f{ALPHA_BONF:.4f} Bonferroni)<br>"
+                         f"\u03b1\u202f=\u202f{ALPHA_BONF_SPEAR:.4f} Bonferroni)<br>"
                          f"<small>(self-confidence vs correct)</small>"),
             "Test Approx.": "Fisher z-transform<br>(two-sided)",
             "Obs. Effect": f"\u03c1 = {rho_g:.3f}<br><small>({p_str})</small>",
             "Effect Label": _cohen_rho_label(rho_g),
-            "Min Detectable (at study n)": f"{_sens_at_n(n_g, ALPHA_BONF)}<br><small>(n\u202f=\u202f{n_g} in group)</small>",
+            "Min Detectable (at study n)": f"{_sens_at_n(n_g, ALPHA_BONF_SPEAR)}<br><small>(n\u202f=\u202f{n_g} in group)</small>",
             "Req. Total N": (f"{_fmt_n(req_n_g_bonf)}<br>"
                              f"<small>(n needed in {g} group)</small>"),
             "Req. n/group": "&mdash;",
@@ -1350,8 +1352,11 @@ Instead, two prospective analyses were carried out for each statistical test:
     <strong>Sensitivity analysis:</strong> The smallest effect size that could
     have been reliably detected (80% power) given the 18 participants enrolled
     and a significance threshold of &alpha;&nbsp;=&nbsp;0.05. For the
-    Bonferroni-corrected per-question comparisons the adjusted threshold
-    &alpha;&nbsp;=&nbsp;0.0042 (0.05&nbsp;&divide;&nbsp;12 tests) was applied.
+    Bonferroni-corrected per-question chi-square comparisons the adjusted
+    threshold &alpha;&nbsp;=&nbsp;0.0042 (0.05&nbsp;&divide;&nbsp;12 tests) was
+    applied; for the Spearman correlation family (1 overall + 3 per-group tests)
+    the adjusted threshold is &alpha;&nbsp;=&nbsp;0.0125
+    (0.05&nbsp;&divide;&nbsp;4 tests).
   </li>
   <li>
     <strong>Prospective sample size estimation:</strong> The number of
@@ -1410,7 +1415,7 @@ def build_fig_legends(effects: dict) -> list[str]:
     req_n_chi_u = _chisq_required_n(w, alpha=ALPHA)
     req_n_chi_b = _chisq_required_n(w, alpha=ALPHA_BONF)
     req_n_rho     = _spearman_required_n(rho)
-    req_n_rho_b   = _spearman_required_n(rho, alpha=ALPHA_BONF)
+    req_n_rho_b   = _spearman_required_n(rho, alpha=ALPHA_BONF_SPEAR)
 
     def _nstr(n: int | None) -> str:
         return f"N&nbsp;=&nbsp;{n}" if n else f"N&nbsp;&gt;&nbsp;{MAX_N}"
@@ -1446,7 +1451,7 @@ def build_fig_legends(effects: dict) -> list[str]:
         if np.isnan(rho_g):
             continue
         req_g  = _spearman_required_n(rho_g)
-        req_gb = _spearman_required_n(rho_g, alpha=ALPHA_BONF)
+        req_gb = _spearman_required_n(rho_g, alpha=ALPHA_BONF_SPEAR)
         p_str = "p&nbsp;&lt;&nbsp;0.001" if pval_g < 0.001 else f"p&nbsp;=&nbsp;{pval_g:.3f}"
         chip  = f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;' \
                 f'background:{HUE_PALETTE[g]};vertical-align:middle;margin-right:3px;"></span>'
@@ -1464,7 +1469,7 @@ def build_fig_legends(effects: dict) -> list[str]:
         "\u03c1 (used as a pilot estimate). "
         "<em>Solid lines</em> show power at \u03b1&nbsp;=&nbsp;0.05; "
         f"<em>dotted lines</em> show power at Bonferroni-adjusted "
-        f"\u03b1&nbsp;=&nbsp;{ALPHA_BONF:.4f}. "
+        f"\u03b1&nbsp;=&nbsp;{ALPHA_BONF_SPEAR:.4f}. "
         f"<em>Green</em> (all participants): "
         f"\u03c1&nbsp;=&nbsp;{rho:.2f} ({_cohen_rho_label(rho)} effect, "
         f"N&nbsp;=&nbsp;{N_TOTAL}); requires {_nstr(req_n_rho)} "
@@ -1668,7 +1673,7 @@ if __name__ == "__main__":
     sens_w_u = _chisq_sensitivity(alpha=ALPHA)
     sens_w_b = _chisq_sensitivity(alpha=ALPHA_BONF)
     sens_rho   = _spearman_sensitivity()
-    sens_rho_b = _spearman_sensitivity(alpha=ALPHA_BONF)
+    sens_rho_b = _spearman_sensitivity(alpha=ALPHA_BONF_SPEAR)
     print(f"  KW  min f:              {sens_f:.4f}")
     print(f"  Chi min w (a=0.05):     {sens_w_u:.4f}")
     print(f"  Chi min w (Bonf):       {sens_w_b:.4f}")
@@ -1686,7 +1691,7 @@ if __name__ == "__main__":
     req_cu  = _chisq_required_n(effects["cohens_w_median"], alpha=ALPHA)
     req_cb  = _chisq_required_n(effects["cohens_w_median"], alpha=ALPHA_BONF)
     req_rho  = _spearman_required_n(effects["spearman_rho"])
-    req_rhob = _spearman_required_n(effects["spearman_rho"], alpha=ALPHA_BONF)
+    req_rhob = _spearman_required_n(effects["spearman_rho"], alpha=ALPHA_BONF_SPEAR)
     print(f"  KW  total N:               {req_kw or f'> {MAX_N}'}")
     print(f"  Chi total N (a=0.05):      {req_cu or f'> {MAX_N}'}")
     print(f"  Chi total N (Bonf):        {req_cb or f'> {MAX_N}'}")
@@ -1710,7 +1715,7 @@ if __name__ == "__main__":
     for rho_g, _, _ in effects["spearman_groups"].values():
         if not np.isnan(rho_g):
             _all_reqs.append(_spearman_required_n(rho_g))
-            _all_reqs.append(_spearman_required_n(rho_g, alpha=ALPHA_BONF))
+            _all_reqs.append(_spearman_required_n(rho_g, alpha=ALPHA_BONF_SPEAR))
     _finite = [n for n in _all_reqs if n is not None]
     common_x_max = min(MAX_N, max(200, (max(_finite) if _finite else 200) + 80))
     print(f"  Common x-axis range: 0 – {common_x_max}")

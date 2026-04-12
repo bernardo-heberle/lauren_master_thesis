@@ -71,7 +71,8 @@ N_TOTAL         = 18
 N_ITEMS         = 12
 N_CORR_TESTS    = 4   # Bonferroni multiplier for Spearman correlations
 ALPHA           = 0.05
-ALPHA_BONF      = ALPHA / N_ITEMS   # ≈ 0.00417 (power analysis Bonferroni level)
+ALPHA_BONF      = ALPHA / N_ITEMS        # ≈ 0.00417 (chi-square Bonferroni level)
+ALPHA_BONF_SPEAR = ALPHA / N_CORR_TESTS  # = 0.0125  (Spearman Bonferroni level)
 POWER_TARGET    = 0.80
 MAX_N           = 500
 
@@ -646,12 +647,18 @@ def check_power_analysis(df: pd.DataFrame) -> None:
     if all_found:
         _pass("All expected analysis rows present in CSV")
 
-    # 6b. Verify Bonferroni alpha = 0.05 / 12
+    # 6b. Verify ALPHA_BONF = 0.05 / 12 and ALPHA_BONF_SPEAR = 0.05 / 4
     alpha_bonf_expected = ALPHA / N_ITEMS
     if abs(ALPHA_BONF - alpha_bonf_expected) < 1e-8:
         _pass(f"ALPHA_BONF = {ALPHA}/{N_ITEMS} = {ALPHA_BONF:.6f}")
     else:
         _fail(f"ALPHA_BONF mismatch: {ALPHA_BONF} != {ALPHA}/{N_ITEMS}")
+
+    alpha_bonf_spear_expected = ALPHA / N_CORR_TESTS
+    if abs(ALPHA_BONF_SPEAR - alpha_bonf_spear_expected) < 1e-8:
+        _pass(f"ALPHA_BONF_SPEAR = {ALPHA}/{N_CORR_TESTS} = {ALPHA_BONF_SPEAR:.6f}")
+    else:
+        _fail(f"ALPHA_BONF_SPEAR mismatch: {ALPHA_BONF_SPEAR} != {ALPHA}/{N_CORR_TESTS}")
 
     # Helper: find rows by substring in normalised Analysis column
     def _pa_rows(pattern: str) -> pd.DataFrame:
@@ -688,8 +695,8 @@ def check_power_analysis(df: pd.DataFrame) -> None:
                 _fail(f"Spearman required N mismatch (α=0.05): live={req_n_live}, CSV={csv_req}")
 
     # 6e. Re-derive sensitivity and required N for Spearman (Bonferroni)
-    sens_bonf_live  = _spearman_sensitivity(alpha=ALPHA_BONF)
-    req_n_bonf_live = _spearman_required_n(rho_live, alpha=ALPHA_BONF)
+    sens_bonf_live  = _spearman_sensitivity(alpha=ALPHA_BONF_SPEAR)
+    req_n_bonf_live = _spearman_required_n(rho_live, alpha=ALPHA_BONF_SPEAR)
 
     row_spr_b = _pa_rows(r"Spearman.*all participants.*Bonferroni")
     if not row_spr_b.empty:

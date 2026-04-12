@@ -935,6 +935,8 @@ def build_fig_spearman(
         "all": _spearman_required_n(rho_all),
         "all_bonf": _spearman_required_n(rho_all, alpha=ALPHA_BONF),
         **{g: _spearman_required_n(v[0]) for g, v in group_rhos.items()},
+        **{f"{g}_bonf": _spearman_required_n(v[0], alpha=ALPHA_BONF)
+           for g, v in group_rhos.items()},
     }
     finite_reqs = [n for n in req_ns.values() if n is not None]
     if x_max is None:
@@ -969,16 +971,31 @@ def build_fig_spearman(
         "PDF":         dict(ax=-60, ay=30),    # moderate rho, above 80% line
         "ChatGPT":     dict(ax=-60, ay=-50),   # negligible rho, N > MAX_N
     }
+    annot_offsets_bonf = {
+        "No Resource": dict(ax=55,  ay=30),
+        "PDF":         dict(ax=55,  ay=-40),
+        "ChatGPT":     dict(ax=55,  ay=-50),
+    }
     for g, (rho_g, pval_g, n_g) in group_rhos.items():
         if np.isnan(rho_g):
             continue
         color = HUE_PALETTE[g]
+        # Regular α = 0.05 (solid)
         powers_g = [_spearman_power(rho_g, float(n)) for n in n_range]
         fig.add_trace(go.Scatter(
             x=n_range.tolist(), y=powers_g,
             mode="lines",
-            line=dict(color=color, width=2, dash="dot"),
+            line=dict(color=color, width=2),
             name=f"{g} (\u03c1\u202f=\u202f{rho_g:.2f}, n\u202f=\u202f{n_g})",
+        ))
+        # Bonferroni α (dotted)
+        powers_g_bonf = [_spearman_power(rho_g, float(n), alpha=ALPHA_BONF)
+                         for n in n_range]
+        fig.add_trace(go.Scatter(
+            x=n_range.tolist(), y=powers_g_bonf,
+            mode="lines",
+            line=dict(color=color, width=2, dash="dot"),
+            name=f"{g} Bonf (\u03c1\u202f=\u202f{rho_g:.2f})",
         ))
 
     # ── Reference lines ───────────────────────────────────────────────────────
@@ -996,13 +1013,21 @@ def build_fig_spearman(
             _annotation_required_n(req_ns["all_bonf"], 0.80, COLOR_SPEAR,
                                    ax=55, ay=-45)
         )
-    # Annotate per-group required Ns where achievable
-    for g, n_req_g in {k: v for k, v in req_ns.items()
-                        if k not in ("all", "all_bonf")}.items():
+    # Annotate per-group required Ns where achievable (regular α)
+    for g in group_rhos:
+        n_req_g = req_ns.get(g)
         if n_req_g is not None:
             off = annot_offsets.get(g, dict(ax=-55, ay=-40))
             annotations.append(
                 _annotation_required_n(n_req_g, 0.80, HUE_PALETTE[g], **off)
+            )
+    # Annotate per-group Bonferroni required Ns where achievable
+    for g in group_rhos:
+        n_req_gb = req_ns.get(f"{g}_bonf")
+        if n_req_gb is not None:
+            off = annot_offsets_bonf.get(g, dict(ax=55, ay=-40))
+            annotations.append(
+                _annotation_required_n(n_req_gb, 0.80, HUE_PALETTE[g], **off)
             )
 
     layout = _build_power_curve_layout(
@@ -1050,11 +1075,11 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
             return f"&gt;&nbsp;{MAX_N // k}"
         return str(int(np.ceil(total / k)))
 
-    def _sens_at_n(n_g: int) -> str:
+    def _sens_at_n(n_g: int, alpha: float = ALPHA) -> str:
         """Min detectable |rho| at a specific per-group n."""
         def _f(r):
-            return _spearman_power(r, n_g, ALPHA) - POWER_TARGET
-        if _spearman_power(0.999, n_g, ALPHA) < POWER_TARGET:
+            return _spearman_power(r, n_g, alpha) - POWER_TARGET
+        if _spearman_power(0.999, n_g, alpha) < POWER_TARGET:
             return "not achievable"
         mde = _brentq(_f, 0.001, 0.999)
         return f"|\u03c1| \u2265 {mde:.3f}"
@@ -1117,7 +1142,8 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
         chip  = (f'<span style="display:inline-block;width:9px;height:9px;'
                  f'border-radius:2px;background:{HUE_PALETTE[g]};'
                  f'vertical-align:middle;margin-right:4px;"></span>')
-        req_n_g = _spearman_required_n(rho_g)
+        req_n_g      = _spearman_required_n(rho_g)
+        req_n_g_bonf = _spearman_required_n(rho_g, alpha=ALPHA_BONF)
         rows_data.append({
             "Analysis": (f"{chip}Spearman ({g})<br>"
                          f"<small>(self-confidence vs correct)</small>"),
@@ -1126,6 +1152,18 @@ def build_summary_table(effects: dict) -> tuple[str, str]:
             "Effect Label": _cohen_rho_label(rho_g),
             "Min Detectable (at study n)": f"{_sens_at_n(n_g)}<br><small>(n\u202f=\u202f{n_g} in group)</small>",
             "Req. Total N": (f"{_fmt_n(req_n_g)}<br>"
+                             f"<small>(n needed in {g} group)</small>"),
+            "Req. n/group": "&mdash;",
+        })
+        rows_data.append({
+            "Analysis": (f"{chip}Spearman ({g},<br>"
+                         f"\u03b1\u202f=\u202f{ALPHA_BONF:.4f} Bonferroni)<br>"
+                         f"<small>(self-confidence vs correct)</small>"),
+            "Test Approx.": "Fisher z-transform<br>(two-sided)",
+            "Obs. Effect": f"\u03c1 = {rho_g:.3f}<br><small>({p_str})</small>",
+            "Effect Label": _cohen_rho_label(rho_g),
+            "Min Detectable (at study n)": f"{_sens_at_n(n_g, ALPHA_BONF)}<br><small>(n\u202f=\u202f{n_g} in group)</small>",
+            "Req. Total N": (f"{_fmt_n(req_n_g_bonf)}<br>"
                              f"<small>(n needed in {g} group)</small>"),
             "Req. n/group": "&mdash;",
         })
@@ -1407,13 +1445,16 @@ def build_fig_legends(effects: dict) -> list[str]:
     for g, (rho_g, pval_g, n_g) in group_rhos.items():
         if np.isnan(rho_g):
             continue
-        req_g = _spearman_required_n(rho_g)
+        req_g  = _spearman_required_n(rho_g)
+        req_gb = _spearman_required_n(rho_g, alpha=ALPHA_BONF)
         p_str = "p&nbsp;&lt;&nbsp;0.001" if pval_g < 0.001 else f"p&nbsp;=&nbsp;{pval_g:.3f}"
         chip  = f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;' \
                 f'background:{HUE_PALETTE[g]};vertical-align:middle;margin-right:3px;"></span>'
         grp_parts.append(
             f"{chip}<strong>{g}</strong>: \u03c1&nbsp;=&nbsp;{rho_g:.2f}, "
-            f"{p_str}, n&nbsp;=&nbsp;{n_g} &rarr; requires {_nstr(req_g)}"
+            f"{p_str}, n&nbsp;=&nbsp;{n_g} &rarr; "
+            f"\u03b1&nbsp;=&nbsp;0.05 requires {_nstr(req_g)}, "
+            f"Bonferroni requires {_nstr(req_gb)}"
         )
 
     leg3 = (
@@ -1421,12 +1462,14 @@ def build_fig_legends(effects: dict) -> list[str]:
         "(Fisher z-transform approximation).</strong> "
         "Each curve shows how power grows with sample size at the observed "
         "\u03c1 (used as a pilot estimate). "
-        f"<em>Solid green line</em> (all participants, \u03b1&nbsp;=&nbsp;0.05): "
+        "<em>Solid lines</em> show power at \u03b1&nbsp;=&nbsp;0.05; "
+        f"<em>dotted lines</em> show power at Bonferroni-adjusted "
+        f"\u03b1&nbsp;=&nbsp;{ALPHA_BONF:.4f}. "
+        f"<em>Green</em> (all participants): "
         f"\u03c1&nbsp;=&nbsp;{rho:.2f} ({_cohen_rho_label(rho)} effect, "
-        f"N&nbsp;=&nbsp;{N_TOTAL}); requires {_nstr(req_n_rho)}. "
-        f"<em>Dotted green line</em> (all participants, Bonferroni "
-        f"\u03b1&nbsp;=&nbsp;{ALPHA_BONF:.4f}): requires {_nstr(req_n_rho_b)}. "
-        "<em>Dotted coloured lines</em> (per group): "
+        f"N&nbsp;=&nbsp;{N_TOTAL}); requires {_nstr(req_n_rho)} "
+        f"(Bonferroni: {_nstr(req_n_rho_b)}). "
+        "<em>Coloured lines</em> (per group): "
         + "; &ensp;".join(grp_parts) + ". "
         "The dashed horizontal line marks 80% power; the dashed vertical line "
         f"marks N&nbsp;=&nbsp;{N_TOTAL} (current total; per-group sizes are "
@@ -1667,6 +1710,7 @@ if __name__ == "__main__":
     for rho_g, _, _ in effects["spearman_groups"].values():
         if not np.isnan(rho_g):
             _all_reqs.append(_spearman_required_n(rho_g))
+            _all_reqs.append(_spearman_required_n(rho_g, alpha=ALPHA_BONF))
     _finite = [n for n in _all_reqs if n is not None]
     common_x_max = min(MAX_N, max(200, (max(_finite) if _finite else 200) + 80))
     print(f"  Common x-axis range: 0 – {common_x_max}")

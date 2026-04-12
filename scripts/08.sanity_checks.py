@@ -614,29 +614,37 @@ def check_power_analysis(df: pd.DataFrame) -> None:
         return
 
     pa = pd.read_csv(PA_CSV_PATH)
+    pa.columns = pa.columns.str.lower()
 
-    # 6a. Expected shape
-    expected_analyses = [
-        "Kruskal-Wallis (total correct)",
-        "Chi-square per question (α=0.05)",
-        "Chi-square per question (α=0.0042, Bonferroni)",
-        "Spearman ρ (all participants)",
-        "Spearman ρ (all participants, α=0.0042 Bonferroni)",
-        "Spearman ρ (No Resource)",
-        "Spearman ρ (PDF)",
-        "Spearman ρ (ChatGPT)",
-    ]
+    # Normalise analysis column (strip narrow no-break spaces etc.)
+    pa["_analysis_norm"] = pa["analysis"].str.replace(r"\s+", " ", regex=True).str.strip()
 
-    if len(pa) == len(expected_analyses):
+    # 6a. Expected shape: 5 main rows + 3 groups × 2 (regular + Bonferroni)
+    expected_n_rows = 11
+    if len(pa) == expected_n_rows:
         _pass(f"Power analysis CSV has {len(pa)} rows as expected")
     else:
-        _fail(f"Power analysis CSV has {len(pa)} rows, expected {len(expected_analyses)}")
+        _fail(f"Power analysis CSV has {len(pa)} rows, expected {expected_n_rows}")
 
-    missing = [a for a in expected_analyses if a not in pa["Analysis"].values]
-    if not missing:
+    # Check that key analyses are present (substring matching for robustness)
+    expected_substrings = [
+        "Kruskal-Wallis",
+        "Chi-square.*0.05",
+        "Chi-square.*Bonferroni",
+        "Spearman.*all participants",
+        "Spearman.*all participants.*Bonferroni",
+    ]
+    for g in GROUP_ORDER:
+        expected_substrings.append(f"Spearman.*{re.escape(g)}")
+        expected_substrings.append(f"Spearman.*{re.escape(g)}.*Bonferroni")
+
+    all_found = True
+    for pattern in expected_substrings:
+        if not pa["_analysis_norm"].str.contains(pattern, regex=True).any():
+            all_found = False
+            _fail(f"No row matching pattern '{pattern}' in power analysis CSV")
+    if all_found:
         _pass("All expected analysis rows present in CSV")
-    else:
-        _fail(f"Missing analysis rows: {missing}")
 
     # 6b. Verify Bonferroni alpha = 0.05 / 12
     alpha_bonf_expected = ALPHA / N_ITEMS
@@ -645,11 +653,15 @@ def check_power_analysis(df: pd.DataFrame) -> None:
     else:
         _fail(f"ALPHA_BONF mismatch: {ALPHA_BONF} != {ALPHA}/{N_ITEMS}")
 
+    # Helper: find rows by substring in normalised Analysis column
+    def _pa_rows(pattern: str) -> pd.DataFrame:
+        return pa[pa["_analysis_norm"].str.contains(pattern, regex=True)]
+
     # 6c. Re-derive Spearman rho from data and compare to CSV
     rho_live, _ = spearmanr(df["self_confidence_mean"], df["n_correct"])
-    row_spr = pa[pa["Analysis"] == "Spearman ρ (all participants)"]
+    row_spr = _pa_rows(r"Spearman.*all participants(?!.*Bonferroni)")
     if not row_spr.empty:
-        csv_rho = _parse_rho_from_csv(row_spr["Obs. effect"].iloc[0])
+        csv_rho = _parse_rho_from_csv(row_spr["obs. effect"].iloc[0])
         if csv_rho is not None and abs(round(rho_live, 3) - csv_rho) < 0.002:
             _pass(f"Spearman ρ from data ({rho_live:.4f}) matches CSV ({csv_rho:.3f})")
         else:
@@ -661,14 +673,14 @@ def check_power_analysis(df: pd.DataFrame) -> None:
 
     if not row_spr.empty:
         csv_sens = _parse_sensitivity_from_csv(
-            row_spr["Min detectable (at study n)"].iloc[0])
+            row_spr["min detectable (at study n)"].iloc[0])
         if csv_sens is not None and sens_live is not None:
             if abs(sens_live - csv_sens) < 0.002:
                 _pass(f"Spearman sensitivity (α=0.05): live={sens_live:.3f}, CSV={csv_sens:.3f}")
             else:
                 _fail(f"Spearman sensitivity mismatch (α=0.05): live={sens_live:.3f}, CSV={csv_sens:.3f}")
 
-        csv_req = _parse_n_from_csv(row_spr["Req. total N"].iloc[0])
+        csv_req = _parse_n_from_csv(row_spr["req. total n"].iloc[0])
         if csv_req is not None and req_n_live is not None:
             if csv_req == req_n_live:
                 _pass(f"Spearman required N (α=0.05): live={req_n_live}, CSV={csv_req}")
@@ -679,18 +691,17 @@ def check_power_analysis(df: pd.DataFrame) -> None:
     sens_bonf_live  = _spearman_sensitivity(alpha=ALPHA_BONF)
     req_n_bonf_live = _spearman_required_n(rho_live, alpha=ALPHA_BONF)
 
-    row_spr_b = pa[pa["Analysis"].str.contains("Bonferroni") &
-                   pa["Analysis"].str.contains("all participants")]
+    row_spr_b = _pa_rows(r"Spearman.*all participants.*Bonferroni")
     if not row_spr_b.empty:
         csv_sens_b = _parse_sensitivity_from_csv(
-            row_spr_b["Min detectable (at study n)"].iloc[0])
+            row_spr_b["min detectable (at study n)"].iloc[0])
         if csv_sens_b is not None and sens_bonf_live is not None:
             if abs(sens_bonf_live - csv_sens_b) < 0.002:
                 _pass(f"Spearman sensitivity (Bonferroni): live={sens_bonf_live:.3f}, CSV={csv_sens_b:.3f}")
             else:
                 _fail(f"Spearman sensitivity mismatch (Bonferroni): live={sens_bonf_live:.3f}, CSV={csv_sens_b:.3f}")
 
-        csv_req_b = _parse_n_from_csv(row_spr_b["Req. total N"].iloc[0])
+        csv_req_b = _parse_n_from_csv(row_spr_b["req. total n"].iloc[0])
         if csv_req_b is not None and req_n_bonf_live is not None:
             if csv_req_b == req_n_bonf_live:
                 _pass(f"Spearman required N (Bonferroni): live={req_n_bonf_live}, CSV={csv_req_b}")
@@ -732,11 +743,12 @@ def check_power_analysis(df: pd.DataFrame) -> None:
         if len(sub) < 3:
             continue
         rho_g, _ = spearmanr(sub["self_confidence_mean"], sub["n_correct"])
-        row_g = pa[pa["Analysis"] == f"Spearman ρ ({grp})"]
+        grp_pat = re.escape(grp)
+        row_g = _pa_rows(rf"Spearman.*{grp_pat}(?!.*Bonferroni)")
         if row_g.empty:
             _warn(f"No power analysis CSV row for group '{grp}'")
             continue
-        csv_rho_g = _parse_rho_from_csv(row_g["Obs. effect"].iloc[0])
+        csv_rho_g = _parse_rho_from_csv(row_g["obs. effect"].iloc[0])
         if csv_rho_g is not None and abs(round(rho_g, 3) - csv_rho_g) < 0.002:
             _pass(f"Spearman ρ for '{grp}': live={rho_g:.3f}, CSV={csv_rho_g:.3f}")
         else:

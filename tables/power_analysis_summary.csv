@@ -5,5 +5,8 @@ Chi-square per question (α=0.05),"χ² (df=2, 2×3 table)",w = 0.352  (median o
 Spearman ρ (all participants),Fisher z-transform (two-sided),ρ = 0.355,medium,|ρ| ≥ 0.619  (N=18),61,N/A  (1 sample)
 "Spearman ρ (all participants, α=0.0042 Bonferroni)",Fisher z-transform (two-sided),ρ = 0.355,medium,|ρ| ≥ 0.743  (N=18),103,N/A  (1 sample)
 Spearman ρ (No Resource),Fisher z-transform (two-sided),ρ = 0.925  (p = 0.003),large,|ρ| ≥ 0.886  (n=7 in group),6  (within No Resource group),—
+"Spearman ρ (No Resource, α=0.0042 Bonferroni)",Fisher z-transform (two-sided),ρ = 0.925  (p = 0.003),large,|ρ| ≥ 0.952  (n=7 in group),9  (within No Resource group),—
 Spearman ρ (PDF),Fisher z-transform (two-sided),ρ = 0.237  (p = 0.701),small,|ρ| ≥ 0.963  (n=5 in group),138  (within PDF group),—
+"Spearman ρ (PDF, α=0.0042 Bonferroni)",Fisher z-transform (two-sided),ρ = 0.237  (p = 0.701),small,|ρ| ≥ 0.989  (n=5 in group),239  (within PDF group),—
 Spearman ρ (ChatGPT),Fisher z-transform (two-sided),ρ = -0.090  (p = 0.866),negligible,|ρ| ≥ 0.924  (n=6 in group),> 500  (within ChatGPT group),—
+"Spearman ρ (ChatGPT, α=0.0042 Bonferroni)",Fisher z-transform (two-sided),ρ = -0.090  (p = 0.866),negligible,|ρ| ≥ 0.973  (n=6 in group),> 500  (within ChatGPT group),—

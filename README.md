@@ -78,7 +78,8 @@ lauren_master_thesis/
 │   ├── 04.generate_report.py               # Step 4: HTML report (legacy)
 │   ├── 05.generate_counts_report.py        # Step 5: counts HTML report
 │   ├── 06.power_analysis.py                # Step 6: power analysis HTML report
-│   └── 07.power_analysis.ipynb             # Step 7: power analysis (notebook)
+│   ├── 07.power_analysis.ipynb             # Step 7: power analysis (notebook)
+│   └── 08.sanity_checks.py                 # Step 8: data integrity & statistical sanity checks
 ├── requirements.txt
 └── README.md
 ```
@@ -105,6 +106,7 @@ flowchart LR
     G["05.generate_counts_report.py\n→ Counts HTML\nreports/"]
     H["06.power_analysis.py\n→ Power HTML\nreports/"]
     C --> I["07.power_analysis.ipynb\n→ Power tables & figures\ntables/ + figures/power_analysis/"]
+    D & E & F & G & H & I --> J["08.sanity_checks.py\n→ 98 integrity checks\nexit 0 = all good"]
 ```
 
 **Numbered script prefixes** indicate execution order. Note that `07.power_analysis.ipynb`
@@ -288,6 +290,23 @@ These scripts generate interactive Plotly-based HTML reports in `reports/`.
 The primary reproducible outputs (static figures and tables) are produced by the
 notebooks instead.
 
+### Step 8 — Verify data integrity (recommended after every full run)
+
+```powershell
+python scripts/08.sanity_checks.py
+```
+
+Runs 111 automated checks across five sections and exits with code 0 if
+everything passes, 1 if any check fails. Expected output ends with:
+
+```
+  PASS: 98
+  FAIL: 0
+  WARN: 13   ← expected; all are chi-square cell-count notices (small N)
+
+  All checks passed.
+```
+
 ---
 
 ## 8. Scripts & Notebooks
@@ -410,6 +429,29 @@ Plotly power curves. The statistical logic in this script is the source for
 | Figure PA1 | Kruskal-Wallis power curve |
 | Figure PA2 | Chi-square power curves (unadjusted and Bonferroni α) |
 | Figure PA3 | Spearman correlation power curves (overall and per group) |
+
+---
+
+### `scripts/08.sanity_checks.py`
+
+**Role:** Pipeline Step 8 — automated data integrity and statistical sanity checks.
+Run after every full pipeline execution to confirm no silent errors were introduced.
+
+```powershell
+python scripts/08.sanity_checks.py
+```
+
+Prints colour-coded PASS / FAIL / WARN for each check and exits with code 0 if
+all pass, 1 if any fail. The 13 expected WARNs are chi-square expected-cell-count
+notices inherent to the small sample size (N = 18) and require no action.
+
+| Section | Checks |
+|---------|--------|
+| **1. Structure** | Shape (18 × 42), column names, no duplicates, group composition, no NaN in critical columns, value ranges |
+| **2. Scoring** | Re-derives all 12 `*_correct` flags from the answer key; re-computes `n_correct`, `n_incorrect`, `n_not_sure`, and `pct_correct_of_attempted`; verifies `n_correct + n_incorrect + n_not_sure == 12` for every row |
+| **3. Derived columns** | `self_confidence_mean == round(mean(3 ratings), 2)` and `duration_min == round(duration_sec / 60, 2)` |
+| **4. Statistical reproducibility** | Re-runs Spearman correlations (Table 3), Bonferroni adjustments (k = 4), Kruskal-Wallis on `n_correct`, and per-question chi-square tests (Table 2, Bonferroni k = 12); compares to saved table files |
+| **5. Cross-script consistency** | Confirms `tables/table3_correlation.csv` matches freshly computed Spearman values (verifying scripts 02 and 04 produced the same results), and that Bonferroni multipliers are encoded consistently in both Table 2 and Table 3 |
 
 ---
 
